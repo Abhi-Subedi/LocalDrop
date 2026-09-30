@@ -1,0 +1,49 @@
+# --- LocalDrop repository .gitignore ---
+
+# Secrets & local environment
+.env
+.env.*
+!.env.example
+.pgdev.env
+*.pem
+*.key
+
+# Python (backend/)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.sqlite3
+
+# Node (frontend/, e2e/)
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# LocalDrop runtime data (never commit user files)
+data/
+*.part
+*.part.*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.log
