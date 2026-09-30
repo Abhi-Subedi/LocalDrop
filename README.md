@@ -38,6 +38,7 @@ fast and private file transfer over a local network, with optional remote access
 | [Diagrams](docs/spec/09-diagrams.md) | Mermaid architecture and flow diagrams |
 | [Risks & Open Questions](docs/spec/10-risks-open-questions.md) | What is unvalidated or undecided |
 | [Build Contract](docs/spec/11-build-contract.md) | **The binding decisions future implementation must follow** |
+| [Implementation Plan](IMPLEMENTATION_PLAN.md) | **Phase-by-phase execution roadmap (phases, slices, issues, milestones)** |
 | [ADRs](docs/adr/ADR-001-backend-framework.md) | Architecture Decision Records |
 
 ## License

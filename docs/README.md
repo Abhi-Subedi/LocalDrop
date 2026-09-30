@@ -1,7 +1,9 @@
 # LocalDrop Documentation
 
 This directory contains the **LocalDrop Master Specification** — the complete product
-and technical design produced *before* implementation (Phase 0).
+and technical design produced *before* implementation (Phase 0). The execution
+roadmap that turns this specification into phased, tracked work is
+[`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) (repo root).
 
 ## How to review
 
