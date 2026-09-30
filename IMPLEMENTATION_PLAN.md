@@ -121,7 +121,7 @@ One-screen recap; normative detail lives in the spec (03–09) and ADRs.
 | Auth | DB sessions + cookies + argon2id + PATs; object-level authz | ADR-007 |
 | Frontend | React 18 + TS + Vite SPA, TanStack Router/Query, Tailwind + Radix | ADR-008 |
 | Deployment | 2-container Compose, no proxy container | ADR-009 |
-| License | AGPL-3.0 recommended — **[DECISION REQUIRED: D1, maintainer ratification]** | ADR-010 |
+| License | **AGPL-3.0 (ratified 2026-10-01, D1 resolved)** — `LICENSE` in repo root | ADR-010 |
 
 Non-negotiable invariants (BC-1…BC-24 in spec 11) are restated as agent rules in §20.
 
@@ -175,7 +175,7 @@ run with hot reload; CI enforces lint/type/test on every PR. No product features
 ```text
 [x] Initialize git repository (main + trunk-based branch model)
 [x] Write .gitignore (secrets, venv, node_modules, data/, *.part)
-[ ] Add LICENSE placeholder decision note (blocked on D1 — see §22)
+[x] Add LICENSE (AGPL-3.0 ratified 2026-10-01, D1 resolved — see §22)
 [ ] Root Makefile (dev, lint, fmt, typecheck, test, seed, reset, doctor, up, down)
 [ ] Backend scaffold: uv project, pyproject.toml (fastapi, uvicorn, sqlalchemy[asyncio],
     alembic, asyncpg, pydantic-settings, structlog, argon2-cffi, pillow, qrcode,
@@ -788,8 +788,8 @@ undocumented manual steps; all community files present; link check green.
 **Goal:** tag v1.0.0 and tell the truth about it: every release gate green, release
 artifacts published, roadmap updated for Phase 2 of the product roadmap.
 
-**Dependencies:** all previous; **D1 license decision** (§22) must be resolved —
-a public repo without a LICENSE cannot ship.
+**Dependencies:** all previous. *(D1 license was resolved 2026-10-01 — AGPL-3.0
+ratified, `LICENSE` present.)*
 
 **Tasks**
 ```text
@@ -1464,7 +1464,7 @@ Per spec 08 §8. **Testing:** nightly drill.
 **LD-030 — Docs set: user guides, config sync, reverse-proxy snippets, community files** `documentation` · P0 · deps: LD-028
 Per Phase 12. **Accept:** fresh-contributor rehearsal passes.
 
-**LD-031 — Release gates execution + v1.0.0** `documentation` · P0 · deps: LD-027, LD-029, LD-030, **D1 license**
+**LD-031 — Release gates execution + v1.0.0** `documentation` · P0 · deps: LD-027, LD-029, LD-030
 Per Phase 13. **Accept:** v1.0.0 published.
 
 ---
@@ -1564,8 +1564,8 @@ in this repository):
 ```text
  1. [x] Initialize Git repository: main branch, .gitignore, master specification
         committed (c5c3fdb) — DONE
- 2. [ ]  Merge this implementation plan to main; resolve D1 (license) so a LICENSE
-         file can exist before anything goes public          (LD-001 prerequisite)
+ 2. [x]  Merge this implementation plan to main; resolve D1 (license) — DONE:
+         AGPL-3.0 ratified 2026-10-01, LICENSE added        (LD-001 prerequisite)
  3. [ ]  Backend scaffold: uv + pyproject + ruff/mypy/pytest config + src layout
         (LD-001)
  4. [ ]  Frontend scaffold: Vite react-ts + pnpm + eslint/prettier/vitest +
@@ -1590,7 +1590,7 @@ in this repository):
 
 | ID | Question | Recommendation | Blocks |
 |---|---|---|---|
-| **D1** | License (ADR-010) | AGPL-3.0 | **Phase 13 / any public release** — repo needs a LICENSE file; nothing else is blocked |
+| **D1** | ~~License~~ **RESOLVED 2026-10-01: AGPL-3.0 ratified** (ADR-010 Accepted, `LICENSE` added) | — | nothing |
 | D3 | Email's role when SMTP unset (Phase 2 product) | console reset only; verification off by default | not on MVP path |
 | D4/D5 | Multi-volume model / CLI language (Phases 4/5 roadmap) | per-folder placement; Rust | future phases |
 

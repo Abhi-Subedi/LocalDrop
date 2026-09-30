@@ -20,5 +20,5 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `0.x` versions cover MVP development; the API stability promises of the spec
   begin at `1.0.0` (see `docs/spec/08-engineering.md` §9).
-- License ratification (ADR-010, decision D1) is pending; no release is published
-  until a LICENSE exists.
+- Licensed under **AGPL-3.0** — ratified 2026-10-01 (ADR-010 Accepted, `LICENSE`
+  added to the repo root).

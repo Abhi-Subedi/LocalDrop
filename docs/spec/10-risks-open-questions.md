@@ -24,7 +24,7 @@ item moves to an ADR and gets struck through here.*
 
 | # | Question | Recommendation on the table | Needed by |
 |---|---|---|---|
-| D1 | **License** (ADR-010) | AGPL-3.0 | Phase 0 exit — repo can't go public without it |
+| ~~D1~~ | ~~License~~ → **RESOLVED 2026-10-01: AGPL-3.0 ratified** (ADR-010 Accepted; `LICENSE` added) | — | — |
 | D2 | Phase 2 translation locales | en + top 2 by early community demand | Phase 2 planning |
 | D3 | Email's role when SMTP unset (admin-console reset only? skip verification?) | console reset; verification off by default | Phase 2 design |
 | D4 | Multi-volume storage model (Phase 4): per-folder placement vs. pool/span | per-folder placement flag | Phase 4 |
