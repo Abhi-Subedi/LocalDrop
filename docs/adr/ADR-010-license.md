@@ -1,7 +1,7 @@
-# ADR-010 — License: AGPL-3.0 (recommended; [DECISION REQUIRED])
+# ADR-010 — License: AGPL-3.0
 
-**Status:** **[DECISION REQUIRED — maintainer ratification before repo goes public]**
-(D1 in 10 §2). **Date:** 2026-09-30.
+**Status:** **Accepted — ratified by maintainer, 2026-10-01 (D1 resolved).**
+**Date:** 2026-09-30 (proposed) · 2026-10-01 (ratified).
 
 ## Context
 
@@ -22,9 +22,11 @@ Precedent in the self-hosted ecosystem runs both ways (Nextcloud/Grafana-class A
 Paperless/MIT) — both models demonstrably work; the question is the founder's intent
 for *this* project.
 
-## Decision (recommendation)
+## Decision (ratified)
 
-**AGPL-3.0-only, no CLA (option C).** Rationale: LocalDrop's whole proposition is
+**AGPL-3.0-only, no CLA (option C)** — ratified 2026-10-01. The `LICENSE` file in the
+repository root is the canonical AGPL-3.0 text. Rationale: LocalDrop's whole
+proposition is
 "your server, your data" — a proprietary hosted fork extracting unpaid work while
 competing with the community version contradicts the project's thesis (P2); AGPL
 prices that in at zero cost to normal self-hosters and typical contributors. D (CLA)
@@ -39,6 +41,3 @@ rejected: contribution friction without realistic benefit at this scale.
   contributing either).
 - **−** Must keep the license header/notice discipline (one file, CI check) and
   vendor bundled assets (fonts) under compatible terms (checked at Phase 1).
-
-**If the maintainer rejects copyleft:** fall back to **Apache-2.0** (not MIT) for
-the patent grant — and record the reversal here, striking this recommendation.

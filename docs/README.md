@@ -49,13 +49,16 @@ unmarked is **Proposed** (the default for architecture that has not been built y
 | `[DECISION REQUIRED]` | Genuinely open; the maintainer must ratify before implementation |
 | `[FUTURE]` | Deliberately deferred; do **not** build in the current phase |
 
-## Current decision state (2026-09-30)
+## Current decision state (2026-10-01)
 
-- **Confirmed by specification:** the ten ADRs (each lists its own status).
+- **Confirmed:** all ten ADRs, including **AGPL-3.0 licensing** (ADR-010 ratified
+  2026-10-01; `LICENSE` added to the repo root).
 - **Proposed:** the full architecture in `03-architecture.md` and the Build Contract.
-- **Open:** items in `10-risks-open-questions.md` — notably license ratification,
-  the email/SMTP role, and mDNS-from-Docker feasibility.
+- **Open:** remaining items in `10-risks-open-questions.md` (Phase-2+ questions such
+  as the email/SMTP role and locale choices; mDNS feasibility remains
+  `[NEEDS VALIDATION]`).
 - **Future:** CLI, plugin system, S3/MinIO backend, multi-volume storage, OAuth.
 
 Implementation must not begin until this specification is reviewed and approved
-(see `11-build-contract.md`).
+(see `11-build-contract.md`). The execution roadmap is
+[`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md).

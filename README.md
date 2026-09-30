@@ -43,5 +43,7 @@ fast and private file transfer over a local network, with optional remote access
 
 ## License
 
-Recommended: **AGPL-3.0** (pending maintainer ratification — see
-[ADR-010](docs/adr/ADR-010-license.md) for the tradeoff analysis).
+LocalDrop is licensed under the **GNU Affero General Public License v3.0**
+([LICENSE](LICENSE) · tradeoff analysis in [ADR-010](docs/adr/ADR-010-license.md)):
+anyone hosting a modified LocalDrop as a network service must make the modified
+source available to that service's users.
