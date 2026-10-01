@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     trusted_proxies: int = 0  # number of trusted proxy hops in X-Forwarded-For chain
     mdns_enabled: bool = False
 
+    # --- database connection behaviour ---
+    # Seconds to wait for a TCP connect to PostgreSQL. Kept short on purpose:
+    # /health/ready is probed with a 5 s timeout by Docker and most
+    # orchestrators, so a dead database has to be reported in seconds, not the
+    # ~2 minutes libpq waits by default.
+    db_connect_timeout: int = 5
+    # Idle seconds before a keepalive probe; three missed probes close the
+    # connection so a half-open socket cannot pin a pool slot.
+    db_keepalive_seconds: int = 30
+
     # --- auth ---
     argon2_time_cost: int = 3
     argon2_memory_cost: int = 65536  # 64 MiB

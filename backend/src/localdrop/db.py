@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -11,7 +12,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import MetaData
 
 from .config import get_settings
 
@@ -29,15 +29,33 @@ class Base(DeclarativeBase):
 
 
 def make_engine(url: str | None = None) -> AsyncEngine:
+    settings = get_settings()
     return create_async_engine(
-        url or get_settings().database_url,
+        url or settings.database_url,
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=5,
-        # Pin the session timezone: TIMESTAMPTZ values then always arrive as
-        # UTC-aware datetimes, independent of the host's TZ (dev machines run
-        # in all kinds of zones; servers in UTC).
-        connect_args={"application_name": "localdrop", "options": "-c timezone=UTC"},
+        # Recycle well inside the typical 5-minute NAT/firewall idle timeout so
+        # a connection killed by the network is replaced, not handed to a
+        # request that will then fail.
+        pool_recycle=1800,
+        # Wait at most this long for a free pool slot. Without it a saturated
+        # pool makes requests queue indefinitely instead of failing visibly.
+        pool_timeout=10,
+        connect_args={
+            "application_name": "localdrop",
+            "options": "-c timezone=UTC",
+            # psycopg waits ~2 minutes for a TCP connect by default. That is
+            # unacceptable for /health/ready (Docker probes with --timeout=5s)
+            # and for request paths: a dead database must be *fast*. These
+            # bounds also stop a firewall silently dropping packets from
+            # hanging a worker for minutes.
+            "connect_timeout": settings.db_connect_timeout,
+            "keepalives": 1,
+            "keepalives_idle": settings.db_keepalive_seconds,
+            "keepalives_interval": 10,
+            "keepalives_count": 3,
+        },
     )
 
 
