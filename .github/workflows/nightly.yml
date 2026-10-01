@@ -21,7 +21,7 @@ concurrency:
 jobs:
   python-audit:
     name: pip-audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,7 +36,7 @@ jobs:
 
   npm-audit:
     name: npm audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -53,7 +53,7 @@ jobs:
 
   image-scan:
     name: Trivy scan (published image)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -74,7 +74,7 @@ jobs:
 
   codeql:
     name: CodeQL (${{ matrix.language }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: read
@@ -97,7 +97,7 @@ jobs:
 
   smoke:
     name: End-to-end (compose)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

@@ -22,7 +22,7 @@ jobs:
   # ---- fast feedback: things that need no services -------------------------
   lint:
     name: Lint & types
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend
@@ -49,7 +49,7 @@ jobs:
 
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -79,7 +79,7 @@ jobs:
 
   docs-sync:
     name: Docs & release metadata
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -108,7 +108,7 @@ jobs:
   # ---- the suite that needs PostgreSQL -------------------------------------
   test:
     name: Tests (postgres ${{ matrix.postgres }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -158,7 +158,7 @@ jobs:
   # ---- packaging must stay buildable ---------------------------------------
   package:
     name: Frozen binary builds
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -188,7 +188,7 @@ jobs:
 
   docker:
     name: Docker image builds
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -256,11 +256,20 @@ jobs:
             exit 1
           fi
 
-          # The image must report the version it was built with, not a stale
-          # literal baked into a source file.
+          # The container must report the version the *source* declares. Not the
+          # LOCALDROP_VERSION build arg: that exists to stamp the OCI label, and
+          # the running server truthfully reports the code it was built from.
+          # Comparing against __about__.py is also the useful check — it fails
+          # if the image is stale, or if the version is baked in twice.
+          #
+          # sed rather than a multi-line `python3 -c`: continuation lines at
+          # column 0 terminate the YAML block scalar, and that failure is
+          # baffling because the workflow file still looks like YAML.
+          want=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' backend/src/localdrop/__about__.py)
+          [ -n "$want" ] || { echo "::error::could not read __version__ from __about__.py"; exit 1; }
           version=$(curl -fsS http://127.0.0.1:18080/api/v1/version | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')
-          echo "image reports version: $version"
-          [ "$version" = "ci" ] || { echo "::error::expected the build arg, got '$version'"; exit 1; }
+          echo "source says $want · image reports $version"
+          [ "$version" = "$want" ] || { echo "::error::the image reports $version, the source says $want"; exit 1; }
 
           # The web UI must be served from the bundle, not a 404 or a JSON error.
           curl -fsS http://127.0.0.1:18080/ | grep -q '<div id="root">'
