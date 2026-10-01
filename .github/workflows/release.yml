@@ -170,19 +170,34 @@ jobs:
           }
           Write-Host "Using $iscc"
 
+          # Verify the payload BEFORE compiling. The [Files] globs in
+          # localdrop.iss are relative to the .iss directory (packaging/windows),
+          # so from the repo root they resolve to dist/release/localdrop. Inno
+          # resolves a non-matching glob to nothing and still compiles happily,
+          # which produces a valid-looking installer with no application in it.
+          $payload = "dist\release\localdrop\localdrop.exe"
+          if (-not (Test-Path $payload)) {
+            throw "the frozen payload is missing at $payload. The [Files] paths in " +
+                  "localdrop.iss point at ..\..\dist\release\localdrop - either the " +
+                  "binary build did not run, or those paths are wrong."
+          }
+          $payloadMiB = [math]::Round((Get-ChildItem dist\release\localdrop -Recurse -File |
+                          Measure-Object Length -Sum).Sum / 1MB, 1)
+          Write-Host "payload present: $payload ($payloadMiB MiB)"
+
           & $iscc "/DAppVersion=${{ needs.prepare.outputs.version }}" `
                   "packaging\windows\localdrop.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
 
-          # Inno compiles [Files] globs silently: a wrong relative path yields a
-          # perfectly valid installer with no payload in it. Refuse to publish one.
           $setup = @(Get-ChildItem dist\release\*-setup.exe -ErrorAction SilentlyContinue)
           if ($setup.Count -ne 1) { throw "expected exactly one installer, found $($setup.Count)" }
           $mib = [math]::Round($setup[0].Length / 1MB, 1)
           $setup[0] | Select-Object Name, @{n='MiB';e={$mib}}
+          # LZMA2 max on 63 MiB of payload lands around 35-40 MiB. Anything under
+          # 20 MiB means the payload did not make it in.
           if ($mib -lt 20) {
-            throw "the installer is only $mib MiB. The frozen payload did not get in - " +
-                  "check the [Files] paths in localdrop.iss. Do not publish this."
+            throw "the installer is only $mib MiB but the payload is $payloadMiB MiB. " +
+                  "The [Files] globs did not match. Do not publish this."
           }
 
       - name: Collect artefacts
