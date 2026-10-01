@@ -89,21 +89,30 @@ jobs:
     name: ${{ matrix.name }}
     needs: prepare
     runs-on: ${{ matrix.os }}
+    # A runner label that no longer exists leaves the job "Waiting for a runner"
+    # until the 6-hour job cap, which stalls the whole release for a long time to
+    # report a typo. 45 minutes is far longer than any of these builds takes
+    # (the slowest observed is the Windows one at ~8 min including the installer)
+    # and turns an unavailable runner into a fast, legible failure.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: linux-x64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             asset: linux-x64
           - name: linux-arm64
-            os: ubuntu-22.04-arm
+            os: ubuntu-24.04-arm
             asset: linux-arm64
+          # macos-13 was retired by GitHub; the Intel runner is now macos-15-intel.
+          # A stale label does not error, it waits forever, so this is worth the
+          # comment.
           - name: macos-x64
-            os: macos-13
+            os: macos-15-intel
             asset: macos-x64
           - name: macos-arm64
-            os: macos-14
+            os: macos-15
             asset: macos-arm64
           - name: windows-x64
             os: windows-2022
@@ -141,30 +150,39 @@ jobs:
         if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
-          # Do NOT pin an Inno Setup version. The community repository retires
-          # exact versions, and a pin that no longer resolves fails the release
-          # for a reason that has nothing to do with LocalDrop.
-          choco install --no-progress -y innosetup
-          if ($LASTEXITCODE -ne 0) { throw "could not install Inno Setup" }
-
-          # Discover ISCC rather than hard-coding a path: 6.x installs under
-          # "Inno Setup 6", and a future 7.x would not.
+          # Do NOT `choco install innosetup`. Inno Setup is already on the runner
+          # image, and Chocolatey then *refuses* the install because a newer
+          # version is present ("A newer version of InnoSetup is already
+          # installed"), exiting non-zero and taking the job with it. Pinning a
+          # version is worse: the community repository retires exact versions,
+          # so a pin eventually fails a release over nothing to do with LocalDrop.
+          #
+          # Find the compiler that is already there.
           $iscc = (Get-ChildItem -Path @(
               "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe",
               "$env:ProgramFiles\Inno Setup*\ISCC.exe"
-            ) -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          if (-not $iscc) { throw "ISCC.exe not found after installing innosetup" }
+            ) -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1).FullName
+          if (-not $iscc) {
+            throw "ISCC.exe not found. If the runner image stops shipping Inno Setup, " +
+                  "add: choco install innosetup --no-progress -y --allow-downgrade"
+          }
           Write-Host "Using $iscc"
 
           & $iscc "/DAppVersion=${{ needs.prepare.outputs.version }}" `
                   "packaging\windows\localdrop.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
 
-          $setup = Get-ChildItem dist\release\*-setup.exe
-          if (-not $setup) { throw "the installer was not produced" }
-          $setup | Select-Object Name, Length
-          if ($setup.Length -lt 1MB) {
-            throw "the installer is implausibly small ($($setup.Length) bytes) - the payload probably did not get in"
+          # Inno compiles [Files] globs silently: a wrong relative path yields a
+          # perfectly valid installer with no payload in it. Refuse to publish one.
+          $setup = @(Get-ChildItem dist\release\*-setup.exe -ErrorAction SilentlyContinue)
+          if ($setup.Count -ne 1) { throw "expected exactly one installer, found $($setup.Count)" }
+          $mib = [math]::Round($setup[0].Length / 1MB, 1)
+          $setup[0] | Select-Object Name, @{n='MiB';e={$mib}}
+          if ($mib -lt 20) {
+            throw "the installer is only $mib MiB. The frozen payload did not get in - " +
+                  "check the [Files] paths in localdrop.iss. Do not publish this."
           }
 
       - name: Collect artefacts
