@@ -47,8 +47,9 @@ First usable release: a single-owner, self-hosted file drop box.
 
 - Single owner account; no multi-user sharing (use public links).
 - Files live in folders (no top-level files); no folder/zip download.
-- Storage paths under `LOCALDROP_DATA_DIR` must keep a stable absolute
-  path across backup/restore.
+- No live cross-device refresh yet (no SSE): the UI refreshes after your own
+  actions; another device's changes appear on reload. SSE arrives in v1.1.
+- LAN discovery is URL + QR (no mDNS advertisement yet).
 - LAN discovery is URL + QR (no mDNS advertisement yet).
 
 ## [Unreleased]

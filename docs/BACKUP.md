@@ -40,9 +40,9 @@ docker compose up -d
 
 Then verify: log in, open a folder, download a file and compare it.
 
-> **Rules:** restore onto the **same LocalDrop version** that made the backup,
-> and keep the container data path `/data` unchanged (database rows reference
-> absolute paths under it — see CONFIGURATION.md).
+> **Rules:** restore onto the **same LocalDrop version** that made the backup.
+> File locations are stored relative to the data dir, so restoring to a
+> different path works — just point the container at it.
 
 ## Disaster drill (do this once)
 

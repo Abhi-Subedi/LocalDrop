@@ -13,7 +13,7 @@ passes them into the `app` container.
 | `LOCALDROP_HOST_PORT` | `8080` | Host port published by compose (container listens on `LOCALDROP_PORT`). |
 | `LOCALDROP_PUBLIC_URL` | empty | Public base URL for share links/QR (e.g. `https://files.example.com`). Empty = derive per request. |
 | `LOCALDROP_DATABASE_URL` | compose default | SQLAlchemy URL, `postgresql+psycopg://…`. |
-| `LOCALDROP_DATA_DIR` | `/data` (container) | File storage root. **Keep stable** — DB rows reference absolute paths under it. |
+| `LOCALDROP_DATA_DIR` | `/data` (container) | File storage root. Paths are stored relative to it, so backup/restore to a different location works — but keep it stable anyway. |
 | `LOCALDROP_PORT` | `8080` | Port the server listens on. |
 | `LOCALDROP_MAX_UPLOAD_BYTES` | `107374182400` (100 GiB) | Max single-file upload; bigger → `413`. `0` = unlimited (not recommended). |
 | `LOCALDROP_UPLOAD_SESSIONS_MAX` | `20` | Concurrent active upload sessions per user. |
