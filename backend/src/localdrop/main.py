@@ -277,17 +277,4 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-def cli() -> None:
-    """`localdrop` entrypoint: run the server."""
-    import uvicorn
 
-    s = get_settings()
-    uvicorn.run(
-        "localdrop.main:create_app",
-        factory=True,
-        host="0.0.0.0",
-        port=s.port,
-        limit_concurrency=100,
-        timeout_keep_alive=65,
-        log_config=None,
-    )

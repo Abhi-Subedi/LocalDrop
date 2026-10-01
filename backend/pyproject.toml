@@ -1,6 +1,6 @@
 [project]
 name = "localdrop"
-version = "1.0.0"
+version = "1.1.0"
 description = "Self-hosted, local-network-first file sharing."
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-only" }
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [project.scripts]
-localdrop = "localdrop.main:cli"
+localdrop = "localdrop.launcher:main"
 
 [build-system]
 requires = ["hatchling"]
