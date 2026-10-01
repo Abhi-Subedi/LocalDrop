@@ -28,6 +28,8 @@ permissions:
   contents: write   # create the Release
   packages: write   # push to ghcr.io
   id-token: write   # OIDC, for provenance attestations
+  attestations: write # actions/attest-build-provenance needs this; without it
+                       # the release publishes and only the attestation step fails
 
 concurrency:
   group: release-${{ github.ref }}
