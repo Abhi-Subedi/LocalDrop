@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
 from ..auth import Principal
-from ..errors import Problem, conflict, not_found, validation
+from ..errors import Problem, conflict, not_found
 from ..models import Blob, File, Folder
 from ..schemas import EntryOut
 
@@ -93,7 +93,7 @@ async def _check_name_free(
 
 async def rename_folder(db: AsyncSession, p: Principal, folder_id: uuid.UUID, name: str) -> Folder:
     folder = await get_owned_folder(db, p, folder_id)
-    if folder.deleted_at is not None or folder.parent_id is None:
+    if folder.deleted_at is not None:
         raise not_found()
     await _check_name_free(db, p, folder.parent_id, name, exclude=folder.id)
     folder.name = name
@@ -117,11 +117,19 @@ async def _is_descendant(db: AsyncSession, candidate: uuid.UUID, ancestor: uuid.
 
 
 async def move_folder(
-    db: AsyncSession, p: Principal, folder_id: uuid.UUID, new_parent_id: uuid.UUID
+    db: AsyncSession, p: Principal, folder_id: uuid.UUID, new_parent_id: uuid.UUID | None
 ) -> Folder:
     folder = await get_owned_folder(db, p, folder_id)
+    if folder.deleted_at is not None:
+        raise not_found()
+    if new_parent_id is None:
+        # move back to the (virtual) root
+        await _check_name_free(db, p, None, folder.name, exclude=folder.id)
+        folder.parent_id = None
+        await db.flush()
+        return folder
     new_parent = await get_owned_folder(db, p, new_parent_id)
-    if folder.deleted_at or new_parent.deleted_at or folder.parent_id is None:
+    if folder.deleted_at or new_parent.deleted_at:
         raise not_found()
     if folder.id == new_parent.id or await _is_descendant(db, new_parent.id, folder.id):
         raise Problem(422, "cycle", "Cannot move a folder into itself or its descendants.")
@@ -136,8 +144,8 @@ async def delete_folder(db: AsyncSession, p: Principal, folder_id: uuid.UUID) ->
     folder = await get_owned_folder(db, p, folder_id)
     if folder.deleted_at is not None:
         raise not_found()
-    if folder.parent_id is None:
-        raise validation("cannot delete the virtual root")
+    # NOTE: the "virtual root" is implicit (parent_id=None on top-level
+    # folders); there is no root row, so any owned folder may be deleted.
     # Collect subtree ids (iterative CTE walk).
     ids: list[uuid.UUID] = [folder.id]
     frontier = [folder.id]
@@ -402,7 +410,7 @@ async def restore_file(db: AsyncSession, p: Principal, file_id: uuid.UUID) -> Fi
 async def list_trash(db: AsyncSession, p: Principal) -> list[EntryOut]:
     files = (
         await db.execute(
-            select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not_null())
+            select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not(None))
         )
     ).scalars().all()
     return [
@@ -418,7 +426,7 @@ async def purge_trash(db: AsyncSession, p: Principal, storage) -> int:
     """Hard-delete trash contents; blob GC happens in cleanup job."""
     files = (
         await db.execute(
-            select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not_null())
+            select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not(None))
         )
     ).scalars().all()
     n = len(files)

@@ -59,12 +59,9 @@ async def setup_token_ep(request: Request, db: AsyncSession = Depends(get_db)) -
     reaches the server first (documented in INSTALLATION). The console also
     prints the token at startup; both consume the same single-use value.
     """
-    s = request.app.state.settings
-    if not s.dev_mode:
-        # Non-dev: only the console token is authoritative; this endpoint
-        # reveals nothing.
-        needed = await accounts.onboarding_required(db)
-        return {"onboarding_required": needed, "token_available": False}
+    needed = await accounts.onboarding_required(db)
+    if not needed:
+        return {"onboarding_required": False, "token_available": False}
     token = await accounts.get_or_issue_setup_token(db)
     return {"onboarding_required": True, "token_available": token is not None, "token": token}
 

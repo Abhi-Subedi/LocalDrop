@@ -34,7 +34,10 @@ def make_engine(url: str | None = None) -> AsyncEngine:
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=5,
-        connect_args={"application_name": "localdrop"},
+        # Pin the session timezone: TIMESTAMPTZ values then always arrive as
+        # UTC-aware datetimes, independent of the host's TZ (dev machines run
+        # in all kinds of zones; servers in UTC).
+        connect_args={"application_name": "localdrop", "options": "-c timezone=UTC"},
     )
 
 

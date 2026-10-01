@@ -31,6 +31,16 @@ INLINE_TYPES = {
     "text/markdown",
 }
 
+# Active-content types: never inline, regardless of what sniffing says.
+# (An SVG uploaded as "notes.txt" must still download, never render.)
+NEVER_INLINE = {
+    "image/svg+xml",
+    "text/html",
+    "application/xhtml+xml",
+    "text/xml",
+    "application/xml",
+}
+
 
 @dataclass
 class ServingDecision:
@@ -40,11 +50,18 @@ class ServingDecision:
 
 
 def decide_serving(declared_mime: str, sniffed_mime: str | None) -> ServingDecision:
-    """Sniffed type wins when available (MIME spoofing defense)."""
+    """Sniffed type wins when available (MIME spoofing defense).
+
+    Either side can force attachment: a declared image/svg+xml served from
+    bytes that sniff as text/plain is still active content.
+    """
     effective = (sniffed_mime or declared_mime or "application/octet-stream").split(";")[0].strip().lower()
     if effective in ("", "application/octet-stream") and declared_mime:
         effective = declared_mime.split(";")[0].strip().lower()
-    safe = effective in INLINE_TYPES and not effective.startswith("image/svg")
+    declared = (declared_mime or "").split(";")[0].strip().lower()
+    if effective in NEVER_INLINE or declared in NEVER_INLINE:
+        return ServingDecision(content_type=effective, disposition="attachment", safe_inline=False)
+    safe = effective in INLINE_TYPES
     return ServingDecision(
         content_type=effective,
         disposition="inline" if safe else "attachment",
@@ -105,6 +122,14 @@ def sniff_bytes(head: bytes) -> str | None:
         return "audio/wav"
     if head.startswith(b"OggS"):
         return "audio/ogg"
+    # Markup sniffing: active content must be detected even when the client
+    # declares an innocent type (polyglot defense — decide_serving then
+    # forces attachment).
+    stripped = head.lstrip()[:512].lower()
+    if stripped.startswith(b"<svg") or b"<svg" in stripped[:128]:
+        return "image/svg+xml"
+    if stripped.startswith((b"<html", b"<!doctype html", b"<?xml")):
+        return "text/html" if b"html" in stripped[:64] else "application/xml"
     if head.startswith(b"{") or head.startswith(b"["):
         if _looks_text(head):
             return "application/json"

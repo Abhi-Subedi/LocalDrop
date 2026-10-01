@@ -76,9 +76,8 @@ async def move_folder(
     db: AsyncSession = Depends(get_db),
 ) -> EntryOut:
     check_csrf(request)
-    if body.new_parent_id is None:
-        raise not_found()
-    folder = await tree.move_folder(db, p, folder_id, uuid_mod.UUID(str(body.new_parent_id)))
+    new_parent = uuid_mod.UUID(str(body.new_parent_id)) if body.new_parent_id is not None else None
+    folder = await tree.move_folder(db, p, folder_id, new_parent)
     await db.commit()
     return EntryOut(
         id=folder.id, kind="folder", name=folder.name, size=0,
@@ -125,6 +124,30 @@ async def folder_path(
     return [PathEntry(id=f.id, name=f.name) for f in chain]
 
 
+@router.get("/folders/root/children", response_model=EntryPage)
+async def root_children(
+    type: str | None = Query(default=None, pattern="^(file|folder)$"),
+    sort: str = Query(default="name", pattern="^-?(name|size|created_at)$"),
+    q: str | None = Query(default=None, max_length=200),
+    cursor: str | None = Query(default=None, max_length=64),
+    limit: int = Query(default=100, ge=1, le=500),
+    p: Principal = Depends(require_read),
+    db: AsyncSession = Depends(get_db),
+) -> EntryPage:
+    """Virtual root: all top-level folders + files uploaded without a folder.
+
+    V1: files always live in a folder; the root shows the user's top folders.
+    NOTE: registered before /folders/{folder_id}/children so "root" is not
+    captured as a folder UUID.
+    """
+    after = (None, cursor) if cursor else None
+    page, next_cursor = await tree.list_children(
+        db, p, None, kind=type, sort=sort, q=q, after=after, limit=limit
+    )
+    await db.commit()
+    return EntryPage(items=page, next_cursor=next_cursor)
+
+
 @router.get("/folders/{folder_id}/children", response_model=EntryPage)
 async def children(
     folder_id: uuid_mod.UUID,
@@ -139,28 +162,6 @@ async def children(
     after = (None, cursor) if cursor else None
     page, next_cursor = await tree.list_children(
         db, p, folder_id, kind=type, sort=sort, q=q, after=after, limit=limit
-    )
-    await db.commit()
-    return EntryPage(items=page, next_cursor=next_cursor)
-
-
-@router.get("/folders/root/children", response_model=EntryPage)
-async def root_children(
-    type: str | None = Query(default=None, pattern="^(file|folder)$"),
-    sort: str = Query(default="name", pattern="^-?(name|size|created_at)$"),
-    q: str | None = Query(default=None, max_length=200),
-    cursor: str | None = Query(default=None, max_length=64),
-    limit: int = Query(default=100, ge=1, le=500),
-    p: Principal = Depends(require_read),
-    db: AsyncSession = Depends(get_db),
-) -> EntryPage:
-    """Virtual root: all top-level folders + files uploaded without a folder.
-
-    V1: files always live in a folder; the root shows the user's top folders.
-    """
-    after = (None, cursor) if cursor else None
-    page, next_cursor = await tree.list_children(
-        db, p, None, kind=type, sort=sort, q=q, after=after, limit=limit
     )
     await db.commit()
     return EntryPage(items=page, next_cursor=next_cursor)

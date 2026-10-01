@@ -255,7 +255,7 @@ def cli() -> None:
 
     s = get_settings()
     uvicorn.run(
-        "localdrop.main:create_app_factory",
+        "localdrop.main:create_app",
         factory=True,
         host="0.0.0.0",
         port=s.port,

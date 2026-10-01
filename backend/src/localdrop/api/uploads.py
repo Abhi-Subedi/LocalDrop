@@ -4,6 +4,7 @@ complete, finalize immediately and run opportunistic hashing."""
 from __future__ import annotations
 
 import uuid as uuid_mod
+from datetime import timezone
 from email.utils import format_datetime
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -32,6 +33,12 @@ def _tus_headers(response: Response, offset: int | None = None, expires=None) ->
     if offset is not None:
         response.headers["Upload-Offset"] = str(offset)
     if expires is not None:
+        # TIMESTAMPTZ values come back in the DB session timezone (not
+        # necessarily UTC) or naive; the wire format needs UTC.
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        else:
+            expires = expires.astimezone(timezone.utc)
         response.headers["Upload-Expires"] = format_datetime(expires, usegmt=True)
 
 

@@ -136,12 +136,17 @@ async def revoke_share(db: AsyncSession, p: Principal, share_id: uuid_mod.UUID) 
 
 
 def _valid(share: Share) -> bool:
+    """Identity validity: revoked/expired shares don't exist (404, no oracle).
+
+    NOTE: download-count exhaustion is NOT checked here on purpose — an
+    exhausted link reports 403 `share-limit-reached` from the download path
+    so holders get a truthful message. The limit itself is still enforced
+    atomically by increment_download_atomic.
+    """
     now = datetime.now(UTC)
     if share.revoked_at is not None:
         return False
     if share.expires_at is not None and now >= share.expires_at:
-        return False
-    if share.max_downloads is not None and share.download_count >= share.max_downloads:
         return False
     return True
 
@@ -207,12 +212,22 @@ async def increment_download_atomic(db: AsyncSession, share: Share) -> bool:
 async def record_download(
     db: AsyncSession, share: Share, file_id: uuid_mod.UUID, session_key: str, ip: str, user_agent: str
 ) -> None:
-    db.add(
-        ShareDownload(
+    """One analytics row per (share, viewer session). Repeat downloads from
+    the same session update nothing here — the counter in `shares` is the
+    authority for limits (increment_download_atomic)."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    stmt = (
+        pg_insert(ShareDownload)
+        .values(
             share_id=share.id, session_key=session_key, file_id=file_id, ip=ip,
             user_agent=(user_agent or "")[:512],
         )
+        # uq_share_downloads_human is a unique *index* (not a constraint),
+        # so target it by columns.
+        .on_conflict_do_nothing(index_elements=["share_id", "session_key"])
     )
+    await db.execute(stmt)
 
 
 async def share_file(share: Share) -> File:
