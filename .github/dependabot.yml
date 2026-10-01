@@ -1,0 +1,63 @@
+# Keep the toolchain current without flooding the project with patch bumps.
+#
+#   weekly    - check for updates once a week (a Tuesday, not a Monday)
+#   grouped   - one PR per ecosystem, so review is not 14 near-identical diffs
+#   dev-only  - Dependabot may merge these by itself; runtime deps are the
+#               maintainer's call because a bump can be a breaking change
+
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: tuesday
+    open-pull-requests-limit: 5
+    labels: [dependencies, backend]
+    groups:
+      python-runtime:
+        patterns: [fastapi, starlette, uvicorn, sqlalchemy, alembic, psycopg*, pydantic*]
+      python-server:
+        patterns: [argon2-cffi, pillow, qrcode, structlog, prometheus-client, greenlet]
+      python-dev:
+        patterns: [pytest*, httpx, asgi-lifespan, ruff, mypy, pyinstaller]
+    ignore:
+      # The suite targets the oldest supported interpreter, not the newest.
+      - dependency-name: mypy
+        update-types: [version-update:semver-patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: tuesday
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+    groups:
+      frontend-runtime:
+        patterns: [react, react-dom, react-router-dom, zustand, tus-js-client, lucide-react]
+      frontend-build:
+        patterns: [vite, "@vitejs/*", typescript, tailwindcss, "@tailwindcss/*"]
+      frontend-dev:
+        patterns: [oxlint, "@types/*", "@fontsource*/*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: tuesday
+    labels: [dependencies, ci]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+      day: tuesday
+    labels: [dependencies, docker]
+    groups:
+      docker:
+        patterns: ["*"]

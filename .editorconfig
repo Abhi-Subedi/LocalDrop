@@ -1,0 +1,45 @@
+# https://editorconfig.org
+#
+# Two editors disagree about tabs vs spaces and about final newlines far more
+# often than anyone admits, and a diff full of invisible changes buries the real
+# change.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# --- Python: ruff formats this, 100 columns (pyproject.toml) ---
+[*.py]
+max_line_length = 100
+
+# --- JavaScript/TypeScript: 2 spaces, no semicolons (matches the existing code) ---
+[*.{js,jsx,ts,tsx,mjs,cjs}]
+indent_size = 2
+max_line_length = 100
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown; do not strip them.
+trim_trailing_whitespace = false
+
+# --- Shell: the installers run under dash, so POSIX only ---
+[*.sh]
+indent_size = 2
+max_line_length = 100
+
+# --- Files where a CRLF/LF mix is genuinely harmful ---
+[*.{ps1,iss,bat,cmd}]
+end_of_line = crlf
+
+# --- Binary or generated: leave them alone ---
+[*.{png,jpg,jpeg,gif,ico,webp,woff,woff2,ico,jar}]
+insert_final_newline = unset
+trim_trailing_whitespace = unset

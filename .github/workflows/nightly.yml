@@ -1,0 +1,144 @@
+name: Nightly
+
+# Slow, noisy checks that are too expensive for every pull request:
+# dependency advisories, image scanning, and a real end-to-end pass against the
+# published container on both CPU architectures.
+
+on:
+  schedule:
+    # 03:17 UTC daily. Off the hour so this does not join the 00:00 stampede.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  python-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Audit the resolved dependency set
+        run: |
+          pip install --disable-pip-version-check pip-audit
+          cd backend
+          pip install --disable-pip-version-check .
+          pip-audit --progress-spinner=off --strict
+
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Report vulnerabilities (advisory only, not a hard gate)
+        run: npm audit --audit-level=high || true
+
+  image-scan:
+    name: Trivy scan (published image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan the released image, not a local build
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:stable
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+        continue-on-error: true
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialise
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  smoke:
+    name: End-to-end (compose)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start the published stack
+        run: |
+          cp .env.example .env
+          # A throwaway key and password: this is a throwaway deployment.
+          python -c "import secrets; print(secrets.token_hex(32))" >> .env
+          echo "POSTGRES_PASSWORD=ci-only-not-a-real-secret" >> .env
+          docker compose up -d --wait
+          docker compose ps
+
+      - name: The API must be ready
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/health/ready; then echo; break; fi
+            [ "$i" -eq 60 ] && { docker compose logs app; exit 1; }
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/api/v1/version; echo
+
+      - name: The web UI must be served
+        run: |
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          curl -fsSI http://127.0.0.1:8080/ | grep -qi 'content-type: text/html'
+          echo "SPA is being served"
+
+      - name: The image must be the released one
+        run: |
+          set -euo pipefail
+          want=$(cat VERSION)
+          got=$(curl -fsS http://127.0.0.1:8080/api/v1/version | python -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+          echo "VERSION file: $want · running: $got"
+          [ "$want" = "$got" ] || { echo "::error::the stable tag is not VERSION"; exit 1; }
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

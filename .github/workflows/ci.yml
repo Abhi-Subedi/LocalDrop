@@ -1,0 +1,226 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref; a force-push should not burn minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  # ---- fast feedback: things that need no services -------------------------
+  lint:
+    name: Lint & types
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: pip install --disable-pip-version-check -e ".[dev]"
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format
+        run: ruff format --check .
+
+      - name: mypy
+        run: mypy src
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: oxlint
+        run: npm run lint
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: build
+        run: npm run build
+
+      - name: The build must produce a SPA the backend can serve
+        run: test -f ../backend/src/localdrop/static/index.html
+
+  docs-sync:
+    name: Docs & release metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: One version, one source of truth
+        run: python scripts/check_version.py
+
+      - name: CONFIGURATION.md documents every LOCALDROP_ setting
+        run: python scripts/check_config_docs.py
+
+      - name: Every requirement has a test referencing its id
+        run: python scripts/check_fr_traceability.py
+
+      - name: Installers and the release pipeline agree on artefact names
+        run: python scripts/check_release_contract.py
+
+      - name: install.sh and uninstall.sh are valid POSIX shell
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=error install.sh uninstall.sh \
+            scripts/backup.sh scripts/restore.sh docker/entrypoint.sh
+
+  # ---- the suite that needs PostgreSQL -------------------------------------
+  test:
+    name: Tests (postgres ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["16"]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: localdrop_test
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: pip install --disable-pip-version-check -e ".[dev]"
+
+      # The suite is deliberately unmocked: real PostgreSQL, real filesystem.
+      - name: pytest
+        env:
+          LOCALDROP_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5433/localdrop_test
+        run: python -m pytest tests/ -q --junitxml=pytest-report.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: backend/pytest-report.xml
+          retention-days: 7
+
+  # ---- packaging must stay buildable ---------------------------------------
+  package:
+    name: Frozen binary builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the web UI
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build and self-check the Linux binary
+        run: |
+          cd backend
+          pip install --disable-pip-version-check ".[dev]"
+          python ../packaging/build-binary.py --onefile
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: localdrop:ci
+          build-args: |
+            LOCALDROP_VERSION=ci
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: The image must report a healthy version
+        run: |
+          set -euo pipefail
+          cid=$(docker run -d -p 18080:8080 \
+            -e LOCALDROP_DEV_MODE=true \
+            -e LOCALDROP_DATABASE_URL='postgresql+psycopg://x@127.0.0.1:1/none' \
+            localdrop:ci)
+          # The server boots and serves /api/v1/version even when the database
+          # is unreachable; that is enough to prove the image is wired up.
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/api/v1/version; then
+              echo; echo "image serves /api/v1/version"; docker rm -f "$cid"; exit 0
+            fi
+            sleep 1
+          done
+          echo "image did not serve /api/v1/version"; docker logs "$cid"; docker rm -f "$cid"; exit 1

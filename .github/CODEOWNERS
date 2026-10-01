@@ -1,0 +1,21 @@
+# Lines that only a maintainer should change.
+#
+# This is advisory, not access control: the owner of the repository can always
+# bypass it, and it applies to anyone with write access.
+#
+# Rationale: these files decide what gets published to a user's machine.
+# Changing one by accident is a supply-chain incident, not a bad merge.
+
+/backend/src/localdrop/security.py       @Abhi-Subedi
+/backend/src/localdrop/auth.py           @Abhi-Subedi
+/backend/src/localdrop/storage.py        @Abhi-Subedi
+/backend/src/localdrop/migrations/        @Abhi-Subedi
+/backend/src/localdrop/__about__.py       @Abhi-Subedi   # the version, by definition
+
+/packaging/                              @Abhi-Subedi
+/install.sh                              @Abhi-Subedi
+/uninstall.sh                            @Abhi-Subedi
+/install.ps1                             @Abhi-Subedi
+/.github/workflows/release.yml           @Abhi-Subedi
+/VERSION                                 @Abhi-Subedi
+/SECURITY.md                             @Abhi-Subedi

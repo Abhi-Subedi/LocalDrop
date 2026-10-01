@@ -1,0 +1,98 @@
+name: Bug report
+description: Something is broken or behaving unexpectedly
+title: "[bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing this. Do not report security issues here — use
+        private reporting instead: https://github.com/Abhi-Subedi/LocalDrop/security/advisories/new
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+      placeholder: |
+        Uploading a 4 GB file fails at ~98% with "checksum mismatch".
+        I expected the upload to finish and the file to appear in the folder.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The most reliable path from a clean state to the problem.
+      placeholder: |
+        1. Start LocalDrop (docker compose up -d)
+        2. Log in, open folder "Videos"
+        3. Drag in big-buck-bunny.mp4 (about 4 GB)
+        4. Upload stops at 98% and shows a checksum error
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: LocalDrop version
+      description: From Settings → About, or `curl -s http://<host>/api/v1/version`
+      placeholder: "1.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is it installed?
+      options:
+        - Docker Compose (the compose file in this repo)
+        - Docker, but I built the image myself
+        - Native Linux binary (install.sh / curl | sh)
+        - macOS Homebrew
+        - macOS install.sh
+        - Windows installer (setup.exe)
+        - Windows portable zip
+        - pip install / from source
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      placeholder: "Debian 12 / Windows 11 23H2 / macOS 14.4 / Ubuntu 24.04 arm64"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Docker: `docker compose logs app`
+        Native Linux: `journalctl -u localdrop -n 100 --no-pager`
+        **Redact setup tokens, API tokens, passwords and any file names you
+        do not want public.**
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: proxy
+    attributes:
+      label: Reverse proxy
+      description: Only if you put one in front of LocalDrop.
+      placeholder: "Caddy, nginx, none"
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, a `curl` reproduction, the file type involved.
+    validations:
+      required: false

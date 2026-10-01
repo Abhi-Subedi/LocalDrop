@@ -1,0 +1,71 @@
+name: Feature request
+description: Suggest something LocalDrop should be able to do
+title: "[feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Describe the situation, not the solution.** A concrete use case is far
+        more useful to us than a proposed implementation, and it often leads to
+        a better design than the one you had in mind.
+
+        Before filing: this may already be in [the roadmap](docs/spec/02-requirements.md)
+        or [the changelog](CHANGELOG.md), and you are welcome to comment on an
+        existing issue instead of opening a duplicate.
+
+  - type: textarea
+    id: situation
+    attributes:
+      label: The situation
+      description: When does this come up, and what are you doing at the time?
+      placeholder: |
+        When I get home from a trip my phone has 30 photos to send to the
+        server. Today I have to open the web app, tap upload, pick them one at
+        a time, and wait on each.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What do you do today?
+      description: The workaround you are stuck with, if there is one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like LocalDrop to do instead?
+      description: Sketch an outcome, not an implementation.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: How big is this?
+      options:
+        - Small — a setting, a label, a small fix
+        - Medium — a new capability within the current design
+        - Large — changes how the app works, or the storage model
+        - I genuinely do not know
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Including doing it outside LocalDrop, and why that is worse.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Contributing
+      options:
+        - label: I would be willing to work on this (open a PR or help test it)
+          required: false

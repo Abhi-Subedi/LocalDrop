@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or "how do I…?"
+    url: https://github.com/Abhi-Subedi/LocalDrop/discussions
+    about: Ask how to install, configure or use LocalDrop. Please read docs/INSTALLATION.md and docs/CONFIGURATION.md first.
+  - name: Security vulnerability
+    url: https://github.com/Abhi-Subedi/LocalDrop/security/advisories/new
+    about: Report privately. Never open a public issue for a security problem.
+  - name: Support policy
+    url: https://github.com/Abhi-Subedi/LocalDrop/blob/main/SUPPORT.md
+    about: Where to ask for help, and what makes a bug report answerable.

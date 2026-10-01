@@ -1,0 +1,361 @@
+name: Release
+
+# Cutting a release is: bump __about__.py, merge, then tag.
+#
+#   git tag -a v1.2.0 -m "1.2.0" && git push origin v1.2.0
+#
+# This workflow then builds, verifies, signs-by-checksum and publishes:
+#   - frozen binaries for linux/{x64,arm64} and macos/{x64,arm64} (onefile)
+#     and windows-x64 (onedir + a portable zip + an Inno Setup installer)
+#   - SHA256SUMS covering every artefact
+#   - a multi-arch container image on ghcr.io (:<ver>, :<major>, :stable, :latest)
+#   - a GitHub Release with the CHANGELOG section as its notes
+#   - a VERSION file the installers read to resolve "stable"
+#   - the Homebrew formula, pushed to the personal tap when TAP_REPO is set
+#
+# PyInstaller cannot cross-compile, so each platform is built on its own runner.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. v1.1.0"
+        required: true
+
+permissions:
+  contents: write   # create the Release
+  packages: write   # push to ghcr.io
+  id-token: write   # OIDC, for provenance attestations
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # --------------------------------------------------------------------------
+  # 0. Work out the version and prove the tag matches the code
+  # --------------------------------------------------------------------------
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      is_prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - id: meta
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c "import re,pathlib; \
+            print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', \
+            pathlib.Path('backend/src/localdrop/__about__.py').read_text()).group(1))")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.tag }}" != "" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::tag $TAG does not match __about__.py version $VERSION."
+            echo "::error::Bump backend/src/localdrop/__about__.py first, or retag."
+            exit 1
+          fi
+          case "$VERSION" in *-*|*rc*|*alpha*|*beta*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;; esac
+          echo "releasing v$VERSION"
+
+      - name: Refuse to ship an unrunnable tree
+        run: |
+          pip install --disable-pip-version-check pytest ruff
+          python scripts/check_version.py
+          python scripts/check_release_contract.py
+          ruff check backend
+
+  # --------------------------------------------------------------------------
+  # 1. Binaries, one job per platform (no cross-compilation)
+  # --------------------------------------------------------------------------
+  binary:
+    name: ${{ matrix.name }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-22.04
+            asset: linux-x64
+          - name: linux-arm64
+            os: ubuntu-22.04-arm
+            asset: linux-arm64
+          - name: macos-x64
+            os: macos-13
+            asset: macos-x64
+          - name: macos-arm64
+            os: macos-14
+            asset: macos-arm64
+          - name: windows-x64
+            os: windows-2022
+            asset: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the web UI (the backend serves it)
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Install the backend with the build toolchain
+        working-directory: backend
+        run: pip install --disable-pip-version-check ".[dev,build]"
+
+      - name: Build and self-check the binary
+        working-directory: backend
+        run: python ../packaging/build-binary.py --zip
+
+      - name: Build the Windows installer
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          # Inno Setup 6 (the preprocessor is required for a stable URL).
+          choco install --no-progress -y innosetup --version "6.4.3"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=${{ needs.prepare.outputs.version }}" `
+                  "packaging\windows\localdrop.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
+          Get-ChildItem dist\release\*.exe | Select-Object Name, Length
+
+      - name: Collect artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.asset }}
+          path: |
+            dist/release/localdrop-${{ needs.prepare.outputs.version }}-${{ matrix.asset }}.tar.gz
+            dist/release/LocalDrop-${{ needs.prepare.outputs.version }}-${{ matrix.asset }}.zip
+            dist/release/LocalDrop-${{ needs.prepare.outputs.version }}-windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  # --------------------------------------------------------------------------
+  # 2. Container image: linux/amd64 + linux/arm64
+  # --------------------------------------------------------------------------
+  image:
+    name: Container image
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=stable
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=LocalDrop
+            org.opencontainers.image.description=Self-hosted, local-network-first file sharing.
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            LOCALDROP_VERSION=${{ needs.prepare.outputs.version }}
+            VCS_REF=${{ github.sha }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # --------------------------------------------------------------------------
+  # 3. Checksums, attestation, Homebrew, GitHub Release
+  # --------------------------------------------------------------------------
+  publish:
+    name: Publish release
+    needs: [prepare, binary, image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Download every artefact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/release
+          merge-multiple: true
+
+      - name: List what we are about to publish
+        run: ls -la dist/release/
+
+      - name: SHA256SUMS
+        run: |
+          cd dist/release
+          # Covers every archive and the installer, so a user can verify
+          # whatever they downloaded with one command.
+          sha256sum ./*.tar.gz ./*.zip ./*.exe > SHA256SUMS
+          cat SHA256SUMS
+          # Fail loudly rather than ship an unchecksummed artefact.
+          test -s SHA256SUMS
+
+      - name: Assemble the release notes from CHANGELOG
+        id: notes
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.prepare.outputs.version }}"
+          python - "$VERSION" <<'PY' > release-notes.md
+          import pathlib, re, sys
+          version = sys.argv[1]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          # Everything between this version's heading and the next one.
+          m = re.search(rf"^## \[{re.escape(version)}\].*?$(.*?)(?=^## \[|\Z)",
+                        text, re.M | re.S)
+          if not m:
+              sys.exit(f"CHANGELOG.md has no [{version}] section")
+          print(f"# LocalDrop {version}\n")
+          print(m.group(0).strip())
+          print(f"\n---\n\n**Full changelog:** "
+                f"https://github.com/${{ github.repository }}/blob/v{version}/CHANGELOG.md")
+          print(f"\n**Upgrade notes:** forward-only migrations. Take a backup first "
+                f"(docs/BACKUP.md).")
+          PY
+          head -40 release-notes.md
+
+      - name: Update the Homebrew formula
+        id: brew
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.prepare.outputs.version }}"
+          SCRIPT=packaging/update-brew-formula.py
+          [ -f "$SCRIPT" ] || { echo "no $SCRIPT; skipping"; echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          python "$SCRIPT" --version "$VERSION" --check-only || true
+          # Real checksums for both macOS arches. The slugs must match
+          # packaging/build-binary.py platform_slug(), or the formula ships a
+          # 404 for every Intel Mac.
+          ARM=$(grep "localdrop-$VERSION-macos-arm64.tar.gz"  dist/release/SHA256SUMS | cut -d' ' -f1)
+          X64=$(grep "localdrop-$VERSION-macos-x64.tar.gz"    dist/release/SHA256SUMS | cut -d' ' -f1)
+          if [ -z "$ARM" ] || [ -z "$X64" ]; then
+            echo "::error::no macOS tarball checksums in SHA256SUMS; cannot update the formula"
+            exit 1
+          fi
+          python "$SCRIPT" --version "$VERSION" --sha256-arm64 "$ARM" --sha256-x64 "$X64"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          cat packaging/homebrew/localdrop.rb
+
+      - name: Commit VERSION and the formula
+        if: steps.brew.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          echo "${{ needs.prepare.outputs.version }}" > VERSION
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION packaging/homebrew/localdrop.rb
+          # Only commit if something actually differs.
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "chore(release): ${{ needs.prepare.outputs.version }} VERSION + formula"
+            git push origin HEAD:main
+          fi
+
+      - name: Push the formula to the Homebrew tap
+        if: steps.brew.outputs.changed == 'true'
+        env:
+          TAP_REPO: ${{ vars.TAP_REPO }}       # e.g. Abhi-Subedi/homebrew-localdrop
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}  # fine-grained PAT, contents:write on the tap
+        run: |
+          set -euo pipefail
+          if [ -z "$TAP_REPO" ] || [ -z "$TAP_TOKEN" ]; then
+            echo "::notice::TAP_REPO or TAP_TOKEN is not set - skipping the tap push."
+            echo "::notice::The formula is committed in packaging/homebrew/localdrop.rb;"
+            echo "::notice::a maintainer can run 'brew tap-update' manually."
+            exit 0
+          fi
+          # A brew tap is a git repo whose <Formula>.rb files sit at the root.
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+          cp packaging/homebrew/localdrop.rb "tap/localdrop.rb"
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- localdrop.rb; then
+            echo "tap already at ${{ needs.prepare.outputs.version }}"
+          else
+            git add localdrop.rb
+            git commit -m "localdrop ${{ needs.prepare.outputs.version }}"
+            git push
+            echo "pushed localdrop ${{ needs.prepare.outputs.version }} to $TAP_REPO"
+          fi
+
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: LocalDrop ${{ needs.prepare.outputs.version }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+          files: |
+            dist/release/*.tar.gz
+            dist/release/*.zip
+            dist/release/*-setup.exe
+            dist/release/SHA256SUMS
+            LICENSE
+            README.md
+            docker-compose.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Provenance for the release assets
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/release/*"
