@@ -141,7 +141,7 @@ export function AppShell() {
               onClick={() => setNewOpen(!newOpen)}
               aria-expanded={newOpen}
               aria-haspopup="menu"
-              className="app-press flex h-12 w-full items-center gap-3 rounded-2xl bg-[var(--ld-accent)] px-4 text-sm font-semibold text-[var(--ld-accent-ink)] shadow-[var(--ld-shadow-md)] hover:bg-[var(--ld-accent-strong)]"
+              className="app-press flex h-11 w-full items-center gap-3 rounded-[10px] bg-[var(--ld-accent)] px-4 text-sm font-semibold text-[var(--ld-accent-ink)] hover:bg-[var(--ld-accent-strong)]"
             >
               <Plus size={20} aria-hidden /> New
               <ChevronDown size={16} className={`ml-auto transition-transform ${newOpen ? 'rotate-180' : ''}`} aria-hidden />
@@ -224,7 +224,7 @@ export function AppShell() {
       </div>
 
       {/* bottom tabs (mobile) */}
-      <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--ld-line)] bg-[var(--ld-surface)]/95 backdrop-blur md:hidden">
+      <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--ld-line)] bg-[var(--ld-surface)] md:hidden">
         {nav.map(({ to, label, short, icon: Icon, end }) => (
           <NavLink
             key={to}

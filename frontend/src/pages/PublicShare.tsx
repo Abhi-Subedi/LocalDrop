@@ -54,9 +54,9 @@ export function PublicSharePage() {
 
   return (
     <main className="grid min-h-screen place-items-center p-6">
-      <div className="animate-rise w-full max-w-sm rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] p-6 text-center shadow-[var(--ld-shadow-md)]">
+      <div className="w-full max-w-sm rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] p-6 text-center shadow-[var(--ld-shadow-md)]">
         <div className="mb-5 flex items-center justify-center gap-2.5">
-          <Logo size={30} />
+          <Logo size={28} />
           <span className="text-lg font-bold tracking-tight">LocalDrop</span>
         </div>
         {error ? (
@@ -65,7 +65,7 @@ export function PublicSharePage() {
           <p className="mt-6 text-sm text-[var(--ld-muted)]" role="status">Loading…</p>
         ) : (
           <>
-            <span className="mx-auto mt-2 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--ld-accent-soft)] text-[var(--ld-accent)]">
+            <span className="mx-auto mt-2 grid place-items-center text-[var(--ld-muted)]">
               <File size={26} aria-hidden />
             </span>
             <p className="mt-3 truncate text-sm font-semibold" title={info.file_name}>{info.file_name}</p>

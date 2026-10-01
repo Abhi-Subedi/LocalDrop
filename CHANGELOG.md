@@ -62,6 +62,11 @@ First usable release: a single-owner, self-hosted file drop box.
 
 ### Added
 
+- **Restraint pass (anti-cliché audit):** removed decorative shadows from
+  buttons/inputs/cards, icon-in-colored-tile empty states, backdrop blur,
+  non-functional entrance animations, and pill-shaped action buttons; toolbar
+  Folder/Upload buttons now appear only on mobile (the sidebar New menu covers
+  desktop); radii unified at 8px for controls, 12px for surfaces.
 - **New brand identity:** leaf logo + wordmark assets replace the teal mark;
   emerald-green (`#22C55E`) accent, near-black dark theme and neutral light
   theme per the visual spec, self-hosted Inter font (works offline on LAN),

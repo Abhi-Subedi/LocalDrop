@@ -41,12 +41,12 @@ export function Button({
   className?: string
   ariaLabel?: string
 }) {
-  const base = 'app-press inline-flex min-h-[38px] items-center justify-center gap-2 rounded-[10px] px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none'
+  const base = 'app-press inline-flex min-h-[38px] items-center justify-center gap-2 rounded-[8px] px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none'
   const variants = {
-    primary: 'bg-[var(--ld-accent)] text-[var(--ld-accent-ink)] shadow-[var(--ld-shadow-sm)] hover:bg-[var(--ld-accent-strong)]',
-    secondary: 'border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-[var(--ld-shadow-sm)] hover:bg-[var(--ld-accent-soft)]',
-    ghost: 'hover:bg-[var(--ld-accent-soft)]',
-    danger: 'bg-[var(--ld-danger)] text-white shadow-[var(--ld-shadow-sm)] hover:opacity-90',
+    primary: 'bg-[var(--ld-accent)] text-[var(--ld-accent-ink)] hover:bg-[var(--ld-accent-strong)]',
+    secondary: 'border border-[var(--ld-line)] bg-[var(--ld-surface)] hover:bg-[var(--ld-surface-2)]',
+    ghost: 'hover:bg-[var(--ld-surface-2)]',
+    danger: 'bg-[var(--ld-danger)] text-white hover:opacity-90',
   }
   return (
     <button type={type} onClick={onClick} disabled={disabled} aria-label={ariaLabel} className={`${base} ${variants[variant]} ${className}`}>
@@ -60,7 +60,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...rest}
-      className={`w-full rounded-[10px] border border-[var(--ld-line)] bg-[var(--ld-surface)] px-3 py-2 text-sm text-[var(--ld-text)] shadow-[var(--ld-shadow-sm)] outline-none transition-colors placeholder:text-[var(--ld-muted)] focus:border-[var(--ld-accent)] ${className}`}
+      className={`w-full rounded-[8px] border border-[var(--ld-line)] bg-[var(--ld-surface)] px-3 py-2 text-sm text-[var(--ld-text)] outline-none transition-colors placeholder:text-[var(--ld-muted)] focus:border-[var(--ld-accent)] ${className}`}
     />
   )
 }
@@ -107,7 +107,7 @@ export function Segmented<T extends string>({
   ariaLabel: string
 }) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="flex rounded-[10px] border border-[var(--ld-line)] bg-[var(--ld-surface)] p-0.5 shadow-[var(--ld-shadow-sm)]">
+    <div role="radiogroup" aria-label={ariaLabel} className="flex rounded-[8px] border border-[var(--ld-line)] bg-[var(--ld-surface)] p-0.5">
       {options.map(({ v, label, icon }) => (
         <button
           key={v}
@@ -116,7 +116,7 @@ export function Segmented<T extends string>({
           aria-label={label}
           title={label}
           onClick={() => onChange(v)}
-          className={`app-press grid h-8 w-9 place-items-center rounded-lg ${
+          className={`app-press grid h-8 w-9 place-items-center rounded-[6px] ${
             value === v
               ? 'bg-[var(--ld-accent-soft)] text-[var(--ld-accent)]'
               : 'text-[var(--ld-muted)] hover:text-[var(--ld-text)]'
@@ -191,10 +191,8 @@ export function EmptyState({
 }) {
   return (
     <div className="grid place-items-center px-6 py-16 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--ld-accent-soft)] text-[var(--ld-accent)]">
-        {icon ?? <Inbox size={26} aria-hidden />}
-      </span>
-      <p className="mt-4 text-sm font-semibold">{title}</p>
+      <span className="text-[var(--ld-muted)]">{icon ?? <Inbox size={24} aria-hidden />}</span>
+      <p className="mt-3 text-sm font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-xs text-sm text-[var(--ld-muted)]">{hint}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -254,7 +252,7 @@ export function Modal({
   }, [open])
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 pb-safe backdrop-blur-[2px] sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 pb-safe sm:items-center" onClick={onClose}>
       <div
         ref={ref}
         role="dialog"

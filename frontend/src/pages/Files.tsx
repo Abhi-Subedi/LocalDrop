@@ -200,18 +200,19 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
           </label>
           <select
             value={sort} onChange={(e) => setSort(e.target.value)}
-            aria-label="Sort files" className="h-9 rounded-full border border-[var(--ld-line)] bg-[var(--ld-surface)] px-3.5 text-sm shadow-[var(--ld-shadow-sm)]"
+            aria-label="Sort files" className="h-9 rounded-[8px] border border-[var(--ld-line)] bg-[var(--ld-surface)] px-3 text-sm"
           >
             {SORTS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
           </select>
-          <div className="ml-auto flex items-center gap-2">
+          {/* desktop uses the sidebar "New" menu; these buttons are for mobile */}
+          <div className="ml-auto flex items-center gap-2 md:hidden">
             {folderId && (
               <>
-                <Button variant="secondary" onClick={() => setDialog({ kind: 'newFolder' })} ariaLabel="Create folder" className="!rounded-full">
-                  <FolderPlus size={16} aria-hidden /><span className="hidden sm:inline">Folder</span>
+                <Button variant="secondary" onClick={() => setDialog({ kind: 'newFolder' })} ariaLabel="Create folder">
+                  <FolderPlus size={16} aria-hidden />
                 </Button>
-                <Button onClick={pickFiles} ariaLabel="Upload files" className="!rounded-full">
-                  <Upload size={16} aria-hidden /><span className="hidden sm:inline">Upload</span>
+                <Button onClick={pickFiles} ariaLabel="Upload files">
+                  <Upload size={16} aria-hidden />
                 </Button>
               </>
             )}
@@ -302,7 +303,7 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
                   if (e.key === ' ') { e.preventDefault(); onRowClick({ ctrlKey: true } as React.MouseEvent, entry, idx) }
                   if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) setMenuFor(entry.id)
                 }}
-                className={`app-press relative cursor-pointer rounded-[var(--ld-radius)] border bg-[var(--ld-surface)] p-2.5 shadow-[var(--ld-shadow-sm)] transition-colors ${
+                className={`app-press relative cursor-pointer rounded-[var(--ld-radius)] border bg-[var(--ld-surface)] p-2.5 transition-colors ${
                   selected.has(entry.id)
                     ? 'border-[var(--ld-accent)] ring-2 ring-[var(--ld-accent)]'
                     : 'border-[var(--ld-line)] hover:border-[var(--ld-line-strong)]'
@@ -328,7 +329,7 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
                     onClick={() => setMenuFor(menuFor === entry.id ? null : entry.id)}
                     aria-label={`Actions for ${entry.name}`}
                     aria-expanded={menuFor === entry.id}
-                    className="app-press grid h-8 w-8 place-items-center rounded-lg bg-[var(--ld-surface)]/90 text-[var(--ld-muted)] shadow-[var(--ld-shadow-sm)] backdrop-blur hover:text-[var(--ld-text)]"
+                    className="app-press grid h-8 w-8 place-items-center rounded-lg border border-[var(--ld-line)] bg-[var(--ld-surface)] text-[var(--ld-muted)] hover:text-[var(--ld-text)]"
                   >
                     <MoreVertical size={15} aria-hidden />
                   </button>
@@ -338,7 +339,7 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
             ))}
           </ul>
         ) : (
-          <div className="overflow-hidden rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-[var(--ld-shadow-sm)]">
+          <div className="overflow-hidden rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)]">
             {/* column headers (desktop, Drive-style table) */}
             <div
               aria-hidden
