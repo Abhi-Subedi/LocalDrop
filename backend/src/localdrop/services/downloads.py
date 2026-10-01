@@ -83,11 +83,12 @@ def file_response(
     import os
 
     size = f.size
-    # Fail cleanly BEFORE streaming starts: a lost blob must be a 404/500
-    # JSON error, never a mid-stream connection abort.
+    # Fail cleanly BEFORE streaming starts: unreadable blob data (missing
+    # file, or a legacy absolute row pointing outside this data dir) is a
+    # 404, never a mid-stream connection abort or a 500.
     try:
         storage.size_of(f.blob.storage_path)
-    except OSError:
+    except (OSError, Problem):
         from ..errors import not_found as _not_found
 
         raise _not_found("File data is not available on the server.") from None

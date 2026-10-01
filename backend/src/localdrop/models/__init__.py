@@ -90,6 +90,8 @@ class PersonalAccessToken(Base, PkMixin, TimestampsMixin):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    user: Mapped[User] = relationship(lazy="joined")
+
     __table_args__ = (Index("uq_pat_token_hash", "token_hash", unique=True),)
 
 

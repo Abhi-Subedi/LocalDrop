@@ -413,13 +413,25 @@ async def list_trash(db: AsyncSession, p: Principal) -> list[EntryOut]:
             select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not(None))
         )
     ).scalars().all()
-    return [
+    folders = (
+        await db.execute(
+            select(Folder).where(Folder.owner_id == p.user_id, Folder.deleted_at.is_not(None))
+        )
+    ).scalars().all()
+    items = [
         EntryOut(
             id=f.id, kind="file", name=f.name, size=f.size, mime_type=f.mime_type,
             created_at=f.created_at, deleted_at=f.deleted_at,
         )
-        for f in sorted(files, key=lambda x: x.deleted_at or x.created_at, reverse=True)
+        for f in files
+    ] + [
+        EntryOut(
+            id=fo.id, kind="folder", name=fo.name, size=0, mime_type=None,
+            created_at=fo.created_at, deleted_at=fo.deleted_at,
+        )
+        for fo in folders
     ]
+    return sorted(items, key=lambda x: x.deleted_at or x.created_at, reverse=True)
 
 
 async def purge_trash(db: AsyncSession, p: Principal, storage) -> int:

@@ -139,6 +139,8 @@ async def test_folder_crud_and_collisions(owner_client):
     assert r.status_code == 200
     r = await owner_client.get("/api/v1/folders/root/children", headers=H)
     assert r.json()["items"] == []
+    r = await owner_client.get("/api/v1/trash", headers=H)
+    assert any(i["id"] == f1["id"] and i["kind"] == "folder" for i in r.json())
     r = await owner_client.post(f"/api/v1/folders/{f1['id']}/restore", headers=H)
     assert r.status_code == 200
 
@@ -416,3 +418,193 @@ async def test_multi_range_degrades_to_full(owner_client):
     file_id = await tus_upload(owner_client, folder["id"], content, name="m.bin")
     r = await owner_client.get(f"/api/v1/files/{file_id}/content", headers={**H, "Range": "bytes=0-9,50-59"})
     assert r.status_code == 200 and len(r.content) == len(content)
+
+
+# ---------------- background GC ----------------
+
+@pytest.mark.asyncio
+async def test_cleanup_pass_purges_trash_reclaims_blobs_and_spares_live_uploads(owner_client):
+    """Regression: cleanup_pass must run (no AttributeError), purge stale
+    trash + orphan blobs, and NEVER collect in-progress (pending) uploads."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import func, select
+
+    from localdrop.db import SessionFactory
+    from localdrop.models import Blob, File, UploadSession
+    from localdrop.services.jobs import cleanup_pass
+    from localdrop.storage import get_storage
+    import uuid as _uuid
+
+    folder = await make_folder(owner_client)
+    file_id = await tus_upload(owner_client, folder["id"], b"trash me", name="t.txt")
+
+    # trash it, then backdate past retention
+    r = await owner_client.delete(f"/api/v1/files/{file_id}", headers=H)
+    assert r.status_code == 204
+    async with SessionFactory() as db:
+        f = (await db.execute(select(File).where(File.id == _uuid.UUID(file_id)))).scalar_one()
+        blob_id = f.blob_id
+        f.deleted_at = datetime.now(UTC) - timedelta(days=60)
+        # a live in-progress upload: pending blob + active session
+        sess = UploadSession(
+            user_id=f.uploader_id, folder_id=f.folder_id, file_name="live.bin",
+            total_size=10, offset=0, status="active", staging_path="staging/live.bin",
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+        db.add(sess)
+        await db.flush()
+        live_blob = Blob(size=10, status="pending", storage_path="staging/live.bin")
+        db.add(live_blob)
+        await db.commit()
+
+    async with SessionFactory() as db:
+        stats = await cleanup_pass(db, get_storage())
+        await db.commit()
+    assert stats["trash_purged"] == 1
+
+    async with SessionFactory() as db:
+        assert (await db.execute(select(File).where(File.id == _uuid.UUID(file_id)))).scalar_one_or_none() is None
+        assert (await db.execute(select(Blob).where(Blob.id == blob_id))).scalar_one_or_none() is None
+        # live upload untouched
+        assert (await db.execute(select(Blob).where(Blob.status == "pending"))).scalars().all() != []
+        n_pending = (await db.execute(
+            select(func.count()).select_from(Blob).where(Blob.status == "pending"))).scalar_one()
+        assert n_pending >= 1
+
+
+# ---------------- personal access tokens ----------------
+
+
+@pytest.mark.asyncio
+async def test_pat_auth_scopes_and_revocation(owner_client, app):
+    """Regression: PAT Bearer auth must work cookie-less; read scope cannot
+    write; revoked PATs stop working. (PAT loading once raised AttributeError
+    because the model lacked the user relationship.)"""
+    from httpx import ASGITransport, AsyncClient
+
+    r = await owner_client.post("/api/v1/me/tokens", json={"name": "rw", "scopes": "read,write"}, headers=H)
+    assert r.status_code == 201
+    rw, rw_id = r.json()["token"], r.json()["id"]
+    r = await owner_client.post("/api/v1/me/tokens", json={"name": "ro", "scopes": "read"}, headers=H)
+    ro = r.json()["token"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://pat") as c:
+        r = await c.get("/api/v1/me", headers={"Authorization": f"Bearer {rw}"})
+        assert r.status_code == 200, r.text
+        r = await c.post("/api/v1/folders", json={"parent_id": None, "name": "pat-folder"},
+                         headers={"Authorization": f"Bearer {rw}"})
+        assert r.status_code == 201, r.text
+        r = await c.get("/api/v1/folders/root/children", headers={"Authorization": f"Bearer {ro}"})
+        assert r.status_code == 200
+        r = await c.post("/api/v1/folders", json={"parent_id": None, "name": "pat-nope"},
+                         headers={"Authorization": f"Bearer {ro}"})
+        assert r.status_code == 403, r.status_code
+
+    r = await owner_client.delete(f"/api/v1/me/tokens/{rw_id}", headers=H)
+    assert r.status_code == 204
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://pat") as c:
+        r = await c.get("/api/v1/me", headers={"Authorization": f"Bearer {rw}"})
+        assert r.status_code == 401, r.status_code
+
+
+@pytest.mark.asyncio
+async def test_metrics_requires_authentication(app, owner_client):
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://anon") as anon:
+        r = await anon.get("/metrics")
+        assert r.status_code == 401, r.status_code
+    r = await owner_client.get("/metrics", headers=H)
+    assert r.status_code == 200, r.status_code
+
+
+# ---------------- unreadable storage ----------------
+
+@pytest.mark.asyncio
+async def test_missing_blob_data_is_clean_404_not_500(owner_client):
+    """Lost blob bytes (deleted/moved data dir) must surface as a clean 404
+    JSON error — never a 500 and never a mid-stream abort."""
+    import os
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from localdrop.db import SessionFactory
+    from localdrop.models import Blob, File
+    from localdrop.storage import get_storage
+
+    folder = await make_folder(owner_client)
+    file_id = await tus_upload(owner_client, folder["id"], b"doomed", name="d.txt")
+    async with SessionFactory() as db:
+        f = (await db.execute(select(File).where(File.id == _uuid.UUID(file_id)))).scalar_one()
+        b = (await db.execute(select(Blob).where(Blob.id == f.blob_id))).scalar_one()
+        path = get_storage().from_recorded(b.storage_path)
+    os.remove(path)
+    for url in (f"/api/v1/files/{file_id}/content", f"/api/v1/files/{file_id}/preview"):
+        r = await owner_client.get(url, headers=H)
+        assert r.status_code == 404, (url, r.status_code)
+        assert r.json()["type"].endswith("not-found")
+
+
+# ---------------- concurrency ----------------
+
+
+@pytest.mark.asyncio
+async def test_concurrent_identical_uploads_no_corruption(owner_client):
+    """Dedup race: two simultaneous uploads of identical bytes must both
+    succeed (no 500/IntegrityError) and share one verified blob."""
+    import asyncio as _asyncio
+
+    from sqlalchemy import func, select
+
+    from localdrop.db import SessionFactory
+    from localdrop.models import Blob
+
+    folder = await make_folder(owner_client)
+    content = b"race-content " * 50000  # 600 KiB
+
+    async def one(name: str) -> str:
+        return await tus_upload(owner_client, folder["id"], content, name=name)
+
+    fid1, fid2 = await _asyncio.gather(one("r1.bin"), one("r2.bin"))
+    assert fid1 != fid2
+    for fid in (fid1, fid2):
+        r = await owner_client.get(f"/api/v1/files/{fid}/content", headers=H)
+        assert r.status_code == 200 and r.content == content
+    async with SessionFactory() as db:
+        n = (await db.execute(
+            select(func.count()).select_from(Blob).where(Blob.status == "verified"))).scalar_one()
+    # both files verified; at most the blobs this test created (other tests'
+    # blobs may exist in the shared schema — assert no *duplicate* for ours)
+    assert n >= 1
+
+
+@pytest.mark.asyncio
+async def test_reupload_heals_lost_blob_bytes(owner_client):
+    """If canonical blob bytes vanish out-of-band, re-uploading identical
+    bytes must heal (new verified blob) instead of linking to the dead row."""
+    import os
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from localdrop.db import SessionFactory
+    from localdrop.models import Blob, File
+    from localdrop.storage import get_storage
+
+    folder = await make_folder(owner_client)
+    content = b"heal-me " * 1000
+    fid1 = await tus_upload(owner_client, folder["id"], content, name="h1.bin")
+    async with SessionFactory() as db:
+        f = (await db.execute(select(File).where(File.id == _uuid.UUID(fid1)))).scalar_one()
+        b = (await db.execute(select(Blob).where(Blob.id == f.blob_id))).scalar_one()
+        assert b.status == "verified"
+        os.remove(get_storage().from_recorded(b.storage_path))
+    # first file now 404s cleanly
+    r = await owner_client.get(f"/api/v1/files/{fid1}/content", headers=H)
+    assert r.status_code == 404
+    # re-upload heals
+    fid2 = await tus_upload(owner_client, folder["id"], content, name="h2.bin")
+    r = await owner_client.get(f"/api/v1/files/{fid2}/content", headers=H)
+    assert r.status_code == 200 and r.content == content

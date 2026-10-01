@@ -52,6 +52,31 @@ class Storage:
             raise Problem(500, "storage-containment", "Internal storage error")
         return resolved
 
+    # ---- recorded paths (what the DB stores) ----
+
+    def to_recorded(self, path: Path | str) -> str:
+        """Persist paths RELATIVE to the data dir.
+
+        Absolute paths break the moment a data volume moves (backup restore
+        to a new path, changed mount). Relative rows stay valid anywhere.
+        Stored POSIX-style so rows are portable across OSes too.
+        """
+        return Path(path).resolve().relative_to(self.data_dir).as_posix()
+
+    def from_recorded(self, recorded: Path | str) -> Path:
+        """Resolve a DB path back to an absolute, containment-checked Path.
+
+        Accepts legacy absolute rows (grandfathered if inside the data dir)
+        and current relative rows.
+        """
+        p = Path(recorded)
+        if p.is_absolute():
+            return self._safe(p)
+        return self._safe(self.data_dir / p)
+
+    def _resolve(self, path: Path | str) -> Path:
+        return self.from_recorded(str(path))
+
     def blob_path(self, sha256_hex: str) -> Path:
         if len(sha256_hex) != 64 or any(c not in "0123456789abcdef" for c in sha256_hex):
             raise Problem(500, "storage-blob-path", "Internal storage error")
@@ -73,13 +98,13 @@ class Storage:
         return path
 
     def open_append(self, path: Path) -> int:
-        return os.open(self._safe(path), _OPEN_FLAGS_APPEND)
+        return os.open(self._resolve(path), _OPEN_FLAGS_APPEND)
 
     def open_read(self, path: Path) -> int:
-        return os.open(self._safe(path), _OPEN_FLAGS_READ)
+        return os.open(self._resolve(path), _OPEN_FLAGS_READ)
 
     def delete(self, path: Path, missing_ok: bool = True) -> None:
-        p = self._safe(path)
+        p = self._resolve(path)
         try:
             p.unlink()
         except FileNotFoundError:
@@ -88,11 +113,11 @@ class Storage:
 
     def replace(self, src: Path, dst: Path) -> None:
         """Atomic move within the data dir (same filesystem)."""
-        os.replace(self._safe(src), self._safe(dst))
+        os.replace(self._resolve(src), self._resolve(dst))
 
     def fsync_file(self, path: Path | str) -> None:
         # O_RDWR: Windows fsync requires a writable handle (EBADF on O_RDONLY).
-        fd = os.open(self._safe(path), _OPEN_FLAGS_RDWR)
+        fd = os.open(self._resolve(path), _OPEN_FLAGS_RDWR)
         try:
             os.fsync(fd)
         finally:
@@ -101,7 +126,7 @@ class Storage:
     def fsync_dir(self, path: Path | str) -> None:
         """Durability nicety for POSIX; Windows cannot open directories — no-op."""
         try:
-            fd = os.open(self._safe(path), _OPEN_FLAGS_READ)
+            fd = os.open(self._resolve(path), _OPEN_FLAGS_READ)
         except (PermissionError, OSError):
             return
         try:
@@ -112,7 +137,7 @@ class Storage:
             os.close(fd)
 
     def size_of(self, path: Path) -> int:
-        return self._safe(path).stat().st_size
+        return self._resolve(path).stat().st_size
 
     def free_bytes(self) -> int:
         return shutil.disk_usage(self.data_dir).free

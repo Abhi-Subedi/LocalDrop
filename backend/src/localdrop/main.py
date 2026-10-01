@@ -60,8 +60,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 
-async def validation_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
-    rid = "unknown"
+async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    rid = getattr(request.state, "request_id", "unknown")
     detail = "; ".join(
         f"{'.'.join(str(x) for x in e['loc'][1:])}: {e['msg']}" for e in exc.errors()[:5]
     )
@@ -224,11 +224,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(shares_api.public, prefix="/api/v1")
     app.include_router(api)  # inner includes already carry /api/v1
 
-    # metrics (PAT-protected at router level is deferred; bind to localhost only in prod docs)
+    # metrics: authenticated only (spec 05 §2.1 admin-only; V1 single owner).
+    # Health probes stay public; point Prometheus at a PAT Bearer token.
+    from fastapi import Depends
     from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
+    from .auth import Principal, resolve_principal
+
     @app.get("/metrics")
-    async def metrics() -> JSONResponse:
+    async def metrics(p: Principal = Depends(resolve_principal)) -> JSONResponse:
         return JSONResponse(
             content=generate_latest(REGISTRY).decode(),
             media_type=CONTENT_TYPE_LATEST,

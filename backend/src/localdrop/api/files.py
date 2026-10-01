@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Principal, check_csrf, require_read, require_write
 from ..db import get_db
-from ..errors import not_found
+from ..errors import Problem, not_found
 from ..ratelimit import LIMITS
 from ..schemas import (
     CopyRequest,
@@ -160,6 +160,10 @@ async def children(
     db: AsyncSession = Depends(get_db),
 ) -> EntryPage:
     after = (None, cursor) if cursor else None
+    # Ownership of the parent itself: not-yours ≡ missing (BC-10).
+    # (The listing query below only returns own rows, but the status code
+    # must not distinguish either.)
+    await tree.get_owned_folder(db, p, folder_id)
     page, next_cursor = await tree.list_children(
         db, p, folder_id, kind=type, sort=sort, q=q, after=after, limit=limit
     )
@@ -337,7 +341,10 @@ async def preview_ep(
     else:
         truncated = False
     storage = get_storage()
-    fd = storage.open_read(f.blob.storage_path)
+    try:
+        fd = storage.open_read(f.blob.storage_path)
+    except (OSError, Problem):
+        raise not_found("File data is not available on the server.")
     try:
         raw = os.read(fd, 256 * 1024)
     finally:

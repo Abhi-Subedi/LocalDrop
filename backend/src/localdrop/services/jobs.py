@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..errors import Problem
-from ..models import AuthSession, Blob, File, Setting, UploadSession
+from ..models import AuthSession, Blob, File, Setting
 from ..storage import Storage
 
 THUMB_SIZES = (256, 1024)
@@ -63,7 +63,10 @@ async def generate_thumbnails(db: AsyncSession, storage: Storage, file_id, max_n
         thumb_dir = storage.thumbs / str(f.id)
         if all((thumb_dir / f"{s}.webp").exists() for s in THUMB_SIZES):
             continue
-        src = Path(f.blob.storage_path)
+        try:
+            src = storage.from_recorded(f.blob.storage_path)
+        except Problem:
+            continue  # blob data lives outside this data dir; nothing to thumb
         if not src.exists():
             continue
         head_mime = sniff_mime(storage, src)
@@ -91,42 +94,49 @@ async def cleanup_pass(db: AsyncSession, storage: Storage) -> dict[str, int]:
     cutoff = now - timedelta(days=s.trash_retention_days)
     stale = (
         await db.execute(
-            select(File).where(File.deleted_at.is_not_null(), File.deleted_at < cutoff)
+            select(File).where(File.deleted_at.is_not(None), File.deleted_at < cutoff)
         )
     ).scalars().all()
     if stale:
         await db.execute(sa_delete(File).where(File.id.in_([f.id for f in stale])))
     stats["trash_purged"] = len(stale)
 
-    # blobs with no referencing file rows → delete row + unlink
+    # blobs with no referencing file rows → delete row + unlink.
+    # Only blobs no upload can still claim (verified/missing): pending blobs
+    # belong to live upload sessions and are handled by expire_sessions —
+    # collecting them here would eat in-progress uploads.
     orphan_blobs = (
         await db.execute(
             select(Blob).where(
-                Blob.id.not_in(select(File.blob_id).where(File.deleted_at.is_(None))),
-                Blob.id.not_in(select(File.blob_id).where(File.deleted_at.is_not_null())),
-                Blob.id.not_in(select(UploadSession.id).where(UploadSession.status == "active")),  # type: ignore[arg-type]
+                Blob.status.in_(("verified", "missing")),
+                Blob.id.not_in(select(File.blob_id)),
             )
         )
     ).scalars().all()
     reclaimed = 0
     for b in orphan_blobs:
-        p = Path(b.storage_path)
         try:
-            storage.delete(p)
-            reclaimed += b.size
+            p = storage.from_recorded(b.storage_path)
         except Problem:
-            pass
+            p = None
+        if p is not None:
+            try:
+                storage.delete(p)
+                reclaimed += b.size
+            except Problem:
+                pass
         await db.delete(b)
     stats["blobs_removed"] = len(orphan_blobs)
     stats["bytes_reclaimed"] = reclaimed
 
-    # 3. expired auth sessions
+    # 3. expired auth sessions: revoked-and-old, idle-expired, absolute-expired
     await db.execute(
         sa_delete(AuthSession).where(
             AuthSession.expires_at < now - timedelta(days=1),
-            AuthSession.revoked_at.is_not_null(),
+            AuthSession.revoked_at.is_not(None),
         )
     )
+    await db.execute(sa_delete(AuthSession).where(AuthSession.expires_at < now - timedelta(days=1)))
     await db.execute(sa_delete(AuthSession).where(AuthSession.absolute_expires_at < now - timedelta(days=7)))
 
     # 4. download_count reconciliation drift logging (spec 04 §5.7)

@@ -26,6 +26,7 @@ from pathlib import Path
 
 from fastapi import Request
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
@@ -140,7 +141,7 @@ async def create_upload(
         total_size=total_size,
         offset=0,
         status="active",
-        staging_path=str(path),
+        staging_path=st.to_recorded(path),
         expires_at=now + timedelta(days=s.upload_ttl_days),
     )
     db.add(sess)
@@ -276,9 +277,7 @@ def os_write(fd: int, data: bytes) -> None:
 
 async def _truncate_to(db: AsyncSession, sess: UploadSession, size: int) -> None:
     """Roll the staging file back to `size` bytes (checksum failure path)."""
-    import os
-
-    path = sess.staging_path
+    path = get_storage().from_recorded(sess.staging_path)
     with open(path, "r+b") as f:
         f.truncate(size)
 
@@ -408,6 +407,31 @@ async def hash_pending_blobs(db: AsyncSession, storage: Storage, max_n: int = 10
             )
         ).scalar_one_or_none()
         if existing is not None:
+            # Self-healing: the canonical bytes may be gone (out-of-band
+            # delete, moved data dir). Restore the bytes at the canonical
+            # path and adopt the existing row — never mint a second row for
+            # the same digest (unique index), so re-uploads can't 404 forever.
+            try:
+                canonical_ok = storage.size_of(existing.storage_path) == existing.size
+            except (OSError, Problem):
+                canonical_ok = False
+            if not canonical_ok:
+                dst = storage.blob_path(hexdigest)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    storage.replace(src, dst)
+                except OSError:
+                    continue  # transient; retried next tick
+                # Re-anchor the row to this data dir (heals legacy absolute
+                # rows pointing elsewhere too).
+                existing.storage_path = storage.to_recorded(dst)
+                existing.size = blob.size
+                await db.execute(
+                    update(File).where(File.blob_id == blob.id).values(blob_id=existing.id)
+                )
+                await db.delete(blob)
+                done += 1
+                continue
             # point pending blob at existing content: adopt existing as canonical
             # (update referencing files to point at existing blob, delete pending row)
             await db.execute(
@@ -424,8 +448,28 @@ async def hash_pending_blobs(db: AsyncSession, storage: Storage, max_n: int = 10
                 continue  # transient; retried next tick
             blob.sha256 = digest
             blob.status = "verified"
-            blob.storage_path = str(dst)
+            blob.storage_path = storage.to_recorded(dst)
             blob.mime_sniffed = mime
+            try:
+                async with db.begin_nested():
+                    await db.flush()
+            except IntegrityError:
+                # Lost the dedup race: a concurrent worker verified identical
+                # bytes first (unique index on verified sha256). The moved
+                # file holds identical bytes, so just link our files to the
+                # winner and drop the pending row.
+                winners = (
+                    await db.execute(
+                        select(Blob).where(Blob.sha256 == digest, Blob.status == "verified")
+                    )
+                ).scalars().all()
+                winner = next((w for w in winners if w.id != blob.id), None)
+                if winner is None:
+                    continue  # vanished mid-race; next tick retries
+                await db.execute(
+                    update(File).where(File.blob_id == blob.id).values(blob_id=winner.id)
+                )
+                await db.delete(blob)
         done += 1
     if done:
         await db.flush()
@@ -450,14 +494,19 @@ async def expire_sessions(db: AsyncSession, storage: Storage) -> int:
         except Problem:
             pass
         n += 1
-    # orphan .part files with no session row (crash between create and flush)
-    known = set(
-        (
-            await db.execute(select(UploadSession.staging_path).where(UploadSession.status == "active"))
-        ).scalars().all()
-    )
+    # orphan .part files with no session row (crash between create and flush).
+    # Compare as resolved absolutes: rows may be legacy-absolute or relative;
+    # rows pointing outside this data dir are someone else's problem (skip).
+    known: set[str] = set()
+    for k in (
+        await db.execute(select(UploadSession.staging_path).where(UploadSession.status == "active"))
+    ).scalars().all():
+        try:
+            known.add(str(storage.from_recorded(k)))
+        except Problem:
+            continue
     for p in storage.staging.glob("*.part"):
-        if str(p) not in known:
+        if str(p.resolve()) not in known:
             try:
                 storage.delete(p)
                 n += 1

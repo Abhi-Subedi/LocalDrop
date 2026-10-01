@@ -46,8 +46,8 @@ def problem_response(
     return JSONResponse(body, status_code=status, media_type="application/problem+json")
 
 
-async def problem_handler(_: Request, exc: Problem) -> JSONResponse:
-    rid = getattr(exc, "request_id", None)
+async def problem_handler(request: Request, exc: Problem) -> JSONResponse:
+    rid = getattr(request.state, "request_id", None) or getattr(exc, "request_id", None)
     log.info(
         "problem",
         status=exc.status,
