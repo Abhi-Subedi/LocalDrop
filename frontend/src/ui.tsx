@@ -10,18 +10,13 @@ import {
 } from 'lucide-react'
 import type { Entry } from './api'
 
-/** LocalDrop brand mark: leaf chip on near-black (works on both themes). */
+/** LocalDrop leaf mark on transparency; petal color follows the theme. */
 export function Logo({ size = 28, className = '' }: { size?: number; className?: string }) {
   return (
-    <img
-      src="/brand-mark.png"
-      width={size}
-      height={size}
-      alt="LocalDrop"
-      className={`shrink-0 select-none ${className}`}
-      style={{ width: size, height: size }}
-      draggable={false}
-    />
+    <span className={`inline-block shrink-0 ${className}`} style={{ height: size, width: size }} aria-label="LocalDrop" role="img">
+      <img src="/mark-on-light.png" alt="" className="only-light h-full w-full select-none object-contain" draggable={false} />
+      <img src="/mark-on-dark.png" alt="" className="only-dark h-full w-full select-none object-contain" draggable={false} />
+    </span>
   )
 }
 
