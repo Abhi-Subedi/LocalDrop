@@ -1,12 +1,22 @@
-# LocalDrop V1 production stack: app + PostgreSQL 16. No proxy, no Redis.
+# LocalDrop production stack: app + PostgreSQL 16. No proxy, no Redis.
 #
 # First install:
-#   cp .env.example .env        # then set SECRET_KEY + POSTGRES_PASSWORD
-#   docker compose up -d --build
-#   docker compose logs -f app  # grab the setup token / LAN URLs
+#   git clone https://github.com/Abhi-Subedi/LocalDrop.git && cd LocalDrop
+#   cp .env.example .env        # then set LOCALDROP_SECRET_KEY + POSTGRES_PASSWORD
+#   docker compose up -d
+#   docker compose logs -f app  # shows the LAN URL + first-run setup token
 #
-# Upgrade:
-#   docker compose pull && docker compose up -d   # entrypoint backs up + migrates
+# The image is pulled from GitHub Container Registry; there is no local build
+# step. `docker compose build` is not needed and `build:` is intentionally
+# absent so a stale local image can never shadow a newer release.
+#
+# Upgrade (1.0.0 -> 1.1.0 is forward-only; take a backup first, see docs/BACKUP.md):
+#   ./scripts/backup.sh
+#   docker compose pull && docker compose up -d
+#   docker compose logs -f app   # watch the migration
+#
+# Pin a version for reproducible deploys by setting LOCALDROP_IMAGE_TAG in .env
+# (e.g. 1.1.0). Default `stable` always tracks the newest release.
 
 name: localdrop
 
@@ -28,12 +38,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   app:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    image: localdrop:1.0.0
+    image: ghcr.io/abhi-subedi/localdrop:${LOCALDROP_IMAGE_TAG:-stable}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -58,12 +66,23 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    ulimits:
+      # Large uploads arrive as many tus chunks; keep the file-descriptor
+      # ceiling high enough that a busy server never hits EMFILE.
+      nofile:
+        soft: 65536
+        hard: 65536
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/api/v1/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:

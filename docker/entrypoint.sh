@@ -4,8 +4,8 @@
 #   1. Wait for PostgreSQL to accept connections.
 #   2. Optionally pg_dump the database before migrating
 #      (LOCALDROP_BACKUP_BEFORE_MIGRATE=1, compose default).
-#   3. alembic upgrade head (forward-only migrations).
-#   4. exec uvicorn (tini stays PID 1).
+#   3. apply migrations (forward-only, via the packaged Alembic environment)
+#   4. exec uvicorn (tini stays PID 1)
 #
 # The server refuses to boot without LOCALDROP_SECRET_KEY (>= 32 chars)
 # unless LOCALDROP_DEV_MODE=true (never in production images).
@@ -68,7 +68,10 @@ EOF
 fi
 
 echo "localdrop: applying migrations..."
-alembic upgrade head
+# `python -m localdrop.migrate` rather than `alembic upgrade head`: the
+# migrations ship inside the package, so this works regardless of WORKDIR and
+# without a CWD-relative alembic.ini.
+python -m localdrop.migrate head
 
 echo "localdrop: starting server on :$PORT"
 exec python -m uvicorn localdrop.main:create_app \
