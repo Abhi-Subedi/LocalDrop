@@ -157,6 +157,7 @@ async def public_info_ep(token: str, request: Request, db: AsyncSession = Depend
     unlocked = share.password_hash is None or request.cookies.get(SHARE_COOKIE) == shares.expected_share_key(token)
     return SharePublicInfo(
         token=share.token,
+        file_id=str(f.id),
         file_name=f.name,
         file_size=f.size,
         requires_password=share.password_hash is not None,

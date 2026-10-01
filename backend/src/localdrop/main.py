@@ -6,8 +6,14 @@ import asyncio
 import contextlib
 import pathlib
 import socket
+import sys
 import uuid as uuid_mod
 from contextlib import asynccontextmanager
+
+# Windows dev only: psycopg async requires the selector event loop. Linux
+# (production) is unaffected.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -185,13 +191,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from .api import system as system_api
     from .api import uploads as uploads_api
 
+    app.include_router(system_api.router, prefix="/api/v1")
     api = system_api.router
     api.include_router(auth_api.router, prefix="/api/v1")
     api.include_router(files_api.router, prefix="/api/v1")
     api.include_router(uploads_api.router, prefix="/api/v1")
     api.include_router(shares_api.router, prefix="/api/v1")
     api.include_router(shares_api.public, prefix="/api/v1")
-    app.include_router(api)
+    app.include_router(api)  # inner includes already carry /api/v1
 
     # metrics (PAT-protected at router level is deferred; bind to localhost only in prod docs)
     from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
@@ -244,13 +251,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def cli() -> None:
     """`localdrop` entrypoint: run the server."""
-    import sys
-
     import uvicorn
-
-    if sys.platform == "win32":
-        # psycopg async on Windows requires the selector loop (dev-only concern).
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     s = get_settings()
     uvicorn.run(

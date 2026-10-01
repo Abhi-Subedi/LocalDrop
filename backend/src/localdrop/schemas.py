@@ -210,6 +210,7 @@ class ShareCreated(ShareOut):
 
 class SharePublicInfo(BaseModel):
     token: str
+    file_id: str
     file_name: str
     file_size: int
     requires_password: bool
