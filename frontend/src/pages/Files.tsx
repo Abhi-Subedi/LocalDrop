@@ -397,7 +397,7 @@ function NameDialog({ title, initial, submitLabel, onSubmit, onClose }: {
   )
 }
 
-export function FolderPicker({ onPick, exclude }: { onPick: (id: string, name: string) => void; exclude?: string }) {
+export function FolderPicker({ onPick, exclude, allowRoot }: { onPick: (id: string | null, name: string) => void; exclude?: string; allowRoot?: boolean }) {
   const [folders, setFolders] = useState<Entry[]>([])
   const [stack, setStack] = useState<{ id: string; name: string }[]>([])
   useEffect(() => {
@@ -410,6 +410,12 @@ export function FolderPicker({ onPick, exclude }: { onPick: (id: string, name: s
         className="flex w-full items-center gap-2 border-b border-[var(--ld-line)] px-3 py-2 text-sm disabled:opacity-40">
         <ArrowUp size={14} aria-hidden /> Up{stack.length ? ` (from ${stack[stack.length - 1].name})` : ''}
       </button>
+      {allowRoot && stack.length === 0 && (
+        <button type="button" onClick={() => onPick(null, 'Top level')}
+          className="w-full bg-[var(--ld-accent-soft)] px-3 py-2 text-left text-sm font-medium">
+          <span className="text-[var(--ld-accent)]">⤴ Move to top level</span>
+        </button>
+      )}
       {folders.map((f) => (
         <button key={f.id} type="button"
           onClick={() => setStack((s) => [...s, { id: f.id, name: f.name }])}
@@ -433,7 +439,9 @@ function MoveDialog({ entries, copy = false, onClose }: { entries: Entry[]; copy
   return (
     <Modal open onClose={onClose} title={copy ? `Copy “${entries[0].name}” to…` : `Move ${entries.length} item${entries.length > 1 ? 's' : ''} to…`}>
       {!done ? (
-        <FolderPicker onPick={async (id) => {
+        <FolderPicker
+          allowRoot={!copy && entries.every((e) => e.kind === 'folder')}
+          onPick={async (id) => {
           try {
             for (const en of entries) {
               if (copy && en.kind === 'file') await api.post(`/files/${en.id}/copy`, { folder_id: id })

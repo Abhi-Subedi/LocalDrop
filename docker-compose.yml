@@ -1,0 +1,77 @@
+# LocalDrop V1 production stack: app + PostgreSQL 16. No proxy, no Redis.
+#
+# First install:
+#   cp .env.example .env        # then set SECRET_KEY + POSTGRES_PASSWORD
+#   docker compose up -d --build
+#   docker compose logs -f app  # grab the setup token / LAN URLs
+#
+# Upgrade:
+#   docker compose pull && docker compose up -d   # entrypoint backs up + migrates
+
+name: localdrop
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: localdrop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: localdrop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - ld
+    # NOTE: no ports published — the database is reachable only inside the stack.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localdrop -d localdrop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: localdrop:1.0.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LOCALDROP_DATABASE_URL: postgresql+psycopg://localdrop:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/localdrop
+      LOCALDROP_SECRET_KEY: ${LOCALDROP_SECRET_KEY:?set LOCALDROP_SECRET_KEY in .env (min 32 chars)}
+      LOCALDROP_DATA_DIR: /data
+      LOCALDROP_PORT: 8080
+      LOCALDROP_PUBLIC_URL: ${LOCALDROP_PUBLIC_URL:-}
+      LOCALDROP_MAX_UPLOAD_BYTES: ${LOCALDROP_MAX_UPLOAD_BYTES:-107374182400}
+      LOCALDROP_TRUSTED_PROXIES: ${LOCALDROP_TRUSTED_PROXIES:-0}
+      LOCALDROP_BACKUP_BEFORE_MIGRATE: 1
+      LOCALDROP_LOG_FORMAT: json
+    volumes:
+      - appdata:/data
+    ports:
+      - "${LOCALDROP_HOST_PORT:-8080}:8080"
+    networks:
+      - ld
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/api/v1/health/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  pgdata:
+    name: localdrop-pgdata
+  appdata:
+    name: localdrop-appdata
+
+networks:
+  ld:
+    name: localdrop
+    driver: bridge

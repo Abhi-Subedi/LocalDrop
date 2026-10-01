@@ -83,6 +83,14 @@ def file_response(
     import os
 
     size = f.size
+    # Fail cleanly BEFORE streaming starts: a lost blob must be a 404/500
+    # JSON error, never a mid-stream connection abort.
+    try:
+        storage.size_of(f.blob.storage_path)
+    except OSError:
+        from ..errors import not_found as _not_found
+
+        raise _not_found("File data is not available on the server.") from None
     decision = decide_serving(f.mime_type, f.blob.mime_sniffed if f.blob else None)
 
     # If-Range: only honor range when ETag matches (else full body)

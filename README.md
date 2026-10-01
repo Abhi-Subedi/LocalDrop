@@ -2,48 +2,69 @@
 
 **Self-hosted, local-network-first file sharing. Fast, private, and yours.**
 
-> ⚠️ **Status: Phase 0 — Specification.** LocalDrop is currently a documentation-first
-> project. No implementation code exists yet. The architecture, database, API, security
-> model, and roadmap below have been specified before building, on purpose.
-> See [docs/README.md](docs/README.md) to review the full Master Specification.
+Upload from your laptop, download on your phone. No cloud account, no telemetry,
+no vendor lock-in — one server on your network holds your files.
 
-## What LocalDrop is
+- **Resumable uploads** — interrupted transfer? It picks up where it stopped,
+  even after a browser restart.
+- **Real files welcome** — multi-gigabyte videos stream in chunks; the server
+  never loads a whole file into RAM.
+- **Share links with teeth** — expiry dates, download limits, passwords,
+  revocation, and QR codes for the couch-to-phone handoff.
+- **Clean file manager** — folders, search, sort, previews, trash with restore.
+  Mobile-friendly, keyboard-navigable, dark-mode aware.
+- **Boring deployment** — one `docker compose up`, two containers
+  (app + PostgreSQL), one data volume.
 
-LocalDrop is an open-source, self-hosted file-sharing platform designed primarily for
-fast and private file transfer over a local network, with optional remote access.
+## Quickstart (5 minutes)
 
-- **Local-network-first** — install it on a home server, NAS, Raspberry Pi, or VPS and
-  reach it instantly from any device on your Wi-Fi (QR-code onboarding, `.local`
-  hostname, IP fallback).
-- **Privacy-first** — zero telemetry, works fully offline, your server holds your data.
-- **Handles real files** — resumable, chunked uploads and streaming, range-supported
-  downloads for multi-gigabyte files without loading them into RAM.
-- **Shareable** — public links with expiry, passwords, download limits, revocation,
-  and QR codes.
-- **Simple to run** — one `docker compose up`, one data volume, five minutes to your
-  first transfer. No cloud account, no vendor lock-in.
+```bash
+git clone <this-repo> localdrop && cd localdrop
+cp .env.example .env
+# edit .env: set LOCALDROP_SECRET_KEY and POSTGRES_PASSWORD
+docker compose up -d --build
+docker compose logs -f app   # shows your LAN URLs + first-run setup token
+```
+
+Open the printed URL (e.g. `http://192.168.1.20:8080`), enter the setup token to
+create your owner account, and drop in your first file. Full steps:
+[INSTALLATION.md](docs/INSTALLATION.md).
+
+## How it works
+
+```
+Browser ──▶ LocalDrop (FastAPI serves API + web UI)
+               ├── PostgreSQL 16 (metadata: tree, users, sessions, shares)
+               └── /data volume  (file bytes: content-addressed blob store)
+```
+
+Uploads speak the [tus](https://tus.io) resumable-upload protocol
+(`creation` + `termination` + server-side `checksum`); downloads stream with
+single-range resume support. Details: [API.md](docs/API.md).
 
 ## Documentation
 
-| Document | Purpose |
+| Guide | What |
 |---|---|
-| [Master Specification](docs/spec/01-product-vision.md) | Start here — product vision, users, principles |
-| [Requirements & MVP](docs/spec/02-requirements.md) | Functional / non-functional requirements, roadmap, MVP definition |
-| [Architecture](docs/spec/03-architecture.md) | System, storage, transfer, discovery, realtime architecture |
-| [Database](docs/spec/04-database.md) | Schema, migrations, invariants |
-| [API](docs/spec/05-api.md) | REST API v1 design |
-| [Security & Privacy](docs/spec/06-security-privacy.md) | Threat model, auth, privacy model |
-| [Frontend & Design](docs/spec/07-frontend-design.md) | Pages, design system, accessibility |
-| [Engineering](docs/spec/08-engineering.md) | Repo layout, dev env, config, testing, CI/CD, Docker, releases |
-| [Diagrams](docs/spec/09-diagrams.md) | Mermaid architecture and flow diagrams |
-| [Risks & Open Questions](docs/spec/10-risks-open-questions.md) | What is unvalidated or undecided |
-| [Build Contract](docs/spec/11-build-contract.md) | **The binding decisions future implementation must follow** |
-| [Implementation Plan](IMPLEMENTATION_PLAN.md) | **Phase-by-phase execution roadmap (phases, slices, issues, milestones)** |
-| [ADRs](docs/adr/ADR-001-backend-framework.md) | Architecture Decision Records |
+| [INSTALLATION.md](docs/INSTALLATION.md) | Install with Docker, first-run setup, LAN access, reverse proxy |
+| [CONFIGURATION.md](docs/CONFIGURATION.md) | Every environment variable, with defaults |
+| [BACKUP.md](docs/BACKUP.md) | What to back up, `backup.sh` / `restore.sh`, restore drill |
+| [SECURITY.md](docs/SECURITY.md) | Threat model, hardening checklist, reporting a vulnerability |
+| [API.md](docs/API.md) | REST v1 reference (auth, files, tus uploads, shares) |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local dev setup, tests, project layout |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+
+Engineering history (spec, ADRs, implementation plan) lives in
+[`docs/spec/`](docs/spec/) and [`docs/adr/`](docs/adr/).
+
+## Status & limits (V1)
+
+Single-owner server: one account owns everything (sharing with other *users*
+is not a V1 feature — use public share links instead). Files live in folders;
+moving a file to the top level is not supported. See
+[CHANGELOG.md](CHANGELOG.md) for what's new and known limitations.
 
 ## License
 
-LocalDrop is licensed under the **GNU Affero General Public License v3.0**
-([LICENSE](LICENSE) · tradeoff analysis in [ADR-010](docs/adr/ADR-010-license.md)):
-anyone hosting a modified LocalDrop as a network service must make the modified
-source available to that service's users.
+[GNU Affero General Public License v3.0](LICENSE) — if you host a modified
+LocalDrop as a network service, share your modified source with your users.

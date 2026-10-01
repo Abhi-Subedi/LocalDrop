@@ -156,6 +156,29 @@ def print_lan_banner(settings: Settings, port: int) -> None:
     print("  Scan the QR above from your phone, or open a URL.\n")
 
 
+async def maybe_print_setup_token() -> None:
+    """First-run onboarding: print the single-use setup token to stdout so
+    headless installs (docker logs) can complete onboarding. Shares its value
+    with GET /api/v1/setup/token — whichever issues first wins."""
+    try:
+        from .db import SessionFactory
+        from .services import accounts
+
+        if SessionFactory is None:
+            return
+        async with SessionFactory() as db:
+            if not await accounts.onboarding_required(db):
+                return
+            token = await accounts.get_or_issue_setup_token(db)
+            await db.commit()
+        if token:
+            print("\n  First-run setup token (valid 15 min, single use):")
+            print(f"    {token}")
+            print("  Open the web UI and enter it to create your owner account.\n")
+    except Exception as e:
+        log.warning("setup_token_unavailable", error=str(e), type=type(e).__name__)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     s = settings or get_settings()
     setup_logging()
@@ -168,6 +191,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         task = asyncio.create_task(job_loop(app))
         if not s.dev_mode:
             print_lan_banner(s, s.port)
+        await maybe_print_setup_token()
         yield
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):

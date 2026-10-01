@@ -18,7 +18,14 @@ from pathlib import Path
 from .config import get_settings
 from .errors import Problem
 
-_OPEN_FLAGS_READ = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+_OPEN_FLAGS_READ = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+# Windows CRT fds default to TEXT mode (\n <-> \r\n translation, 0x1A = EOF).
+# Every open in this module must force binary mode; Linux O_BINARY == 0 (no-op).
+_OPEN_FLAGS_WRITE_NEW = (
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+)
+_OPEN_FLAGS_APPEND = os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+_OPEN_FLAGS_RDWR = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
 
 
 class Storage:
@@ -61,14 +68,12 @@ class Storage:
     def create_staging(self, session_id: str) -> Path:
         """Exclusive creation of a .part file (defense layer 3)."""
         path = self.staging_path(session_id)
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        fd = os.open(path, flags, 0o600)
+        fd = os.open(path, _OPEN_FLAGS_WRITE_NEW, 0o600)
         os.close(fd)
         return path
 
     def open_append(self, path: Path) -> int:
-        flags = os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
-        return os.open(self._safe(path), flags)
+        return os.open(self._safe(path), _OPEN_FLAGS_APPEND)
 
     def open_read(self, path: Path) -> int:
         return os.open(self._safe(path), _OPEN_FLAGS_READ)
@@ -87,7 +92,7 @@ class Storage:
 
     def fsync_file(self, path: Path | str) -> None:
         # O_RDWR: Windows fsync requires a writable handle (EBADF on O_RDONLY).
-        fd = os.open(self._safe(path), os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+        fd = os.open(self._safe(path), _OPEN_FLAGS_RDWR)
         try:
             os.fsync(fd)
         finally:
@@ -96,7 +101,7 @@ class Storage:
     def fsync_dir(self, path: Path | str) -> None:
         """Durability nicety for POSIX; Windows cannot open directories — no-op."""
         try:
-            fd = os.open(self._safe(path), os.O_RDONLY)
+            fd = os.open(self._safe(path), _OPEN_FLAGS_READ)
         except (PermissionError, OSError):
             return
         try:

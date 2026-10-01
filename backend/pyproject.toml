@@ -6,6 +6,9 @@ requires-python = ">=3.12"
 license = { text = "AGPL-3.0-only" }
 dependencies = [
     "fastapi>=0.115",
+    # Floor guarantees the GHSA-7f5h-v6xp-fcq8 multi-range DoS fix; the app
+    # additionally serves single-range responses only (see services/downloads.py).
+    "starlette>=0.41",
     "uvicorn[standard]>=0.30",
     "sqlalchemy[asyncio]>=2.0.40",
     "alembic>=1.13",

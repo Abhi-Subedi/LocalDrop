@@ -317,7 +317,6 @@ async def list_sessions(db: AsyncSession, p: Principal) -> list[UploadSession]:
 async def finalize(db: AsyncSession, p: Principal, session_id: uuid_mod.UUID) -> File:
     """Finalize an upload whose offset == total_size (called by PATCH completion
     or explicit POST). Storage-first, DB-second (BC-7)."""
-    s = get_settings()
     st: Storage = get_storage()
     sess = (
         await db.execute(

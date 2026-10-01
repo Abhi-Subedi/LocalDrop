@@ -12,9 +12,9 @@ export function SetupPage() {
   const nav = useNavigate()
 
   useEffect(() => {
-    // Dev convenience: surface the server-issued token automatically.
+    // First-run convenience: the server issues a setup token on demand.
     api.get<{ token?: string; token_available: boolean }>('/setup/token')
-      .then((r) => { if (r.token) { setToken(r.token); toast('Setup token filled in automatically (dev mode).') } })
+      .then((r) => { if (r.token) { setToken(r.token); toast('Setup token filled in automatically.') } })
       .catch(() => {})
   }, [])
 

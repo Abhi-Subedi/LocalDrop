@@ -1,0 +1,25 @@
+# Docker build context exclusions — keep the image lean and secret-free.
+
+.git/
+.gitignore
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/static/
+frontend/node_modules/
+frontend/dist/
+node_modules/
+data/
+*.part
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+docs/
+scripts/
+e2e/
+*.md

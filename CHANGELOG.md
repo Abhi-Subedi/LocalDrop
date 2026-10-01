@@ -4,6 +4,53 @@ All notable changes to LocalDrop are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) ·
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] — 2026-10-01
+
+First usable release: a single-owner, self-hosted file drop box.
+
+### Added
+
+- **Auth:** first-run setup token (console + `/setup/token`, last-writer-wins),
+  owner onboarding, login/logout, DB sessions (idle 7 d + absolute 30 d,
+  rotation, per-device list/revoke), password change (revokes others), personal
+  access tokens (`read|write` scopes), login rate limiting with lockout.
+- **Files:** folders (create/rename/move incl. top level/delete/restore,
+  cycle guard, case-insensitive collisions), file rename/move/copy/delete,
+  trash with restore + purge, search, six sort orders, paginated listings.
+- **Uploads:** native tus 1.0.0 subset (create/offset/append/cancel), per-chunk
+  sha256, interrupt + HEAD resume, streaming bounded-RAM writes, dedup by
+  content hash, `O_BINARY`-safe byte handling on all platforms.
+- **Downloads:** streaming, single-range resume (`206`), suffix ranges,
+  `ETag`/`If-Range`, magic-byte sniffing with an inline/attachment policy
+  (SVG/HTML/XML always download, never render).
+- **Sharing:** 26-char secure tokens, expiry, download limits (atomic,
+  race-free), passwords (argon2id + HMAC cookie), revocation, QR codes,
+  anonymous `/s/{token}` page, indistinguishable 404s for dead links.
+- **UI:** React SPA — file browser (breadcrumbs, drag-drop, selection,
+  context menus, previews, upload sheet with progress), shares manager,
+  trash, settings (password, sessions, PATs), public share page;
+  mobile-first, keyboard accessible, dark-mode aware.
+- **Deploy:** multi-stage Docker image (non-root, `cap_drop ALL`,
+  healthchecks), 2-service Compose stack, entrypoint with DB wait +
+  pre-migration `pg_dump` valve + auto-migrate, `backup.sh`/`restore.sh`.
+- **Docs:** README, INSTALLATION, CONFIGURATION, BACKUP, SECURITY, API,
+  DEVELOPMENT, CONTRIBUTING, Code of Conduct.
+- **Tests:** 20-test critical-path suite (auth, authz isolation, file +
+  share lifecycles, tus failure modes, hostile names, binary byte-identity).
+
+### Security
+
+- See `docs/SECURITY.md` for the threat model and hardening checklist.
+- Serve past your LAN only over HTTPS; complete setup immediately.
+
+### Known limitations (V1)
+
+- Single owner account; no multi-user sharing (use public links).
+- Files live in folders (no top-level files); no folder/zip download.
+- Storage paths under `LOCALDROP_DATA_DIR` must keep a stable absolute
+  path across backup/restore.
+- LAN discovery is URL + QR (no mDNS advertisement yet).
+
 ## [Unreleased]
 
 ### Added

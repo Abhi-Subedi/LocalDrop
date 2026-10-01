@@ -443,7 +443,3 @@ def delete_files_by_ids(ids: list[uuid.UUID]):
     from sqlalchemy import delete as _del
 
     return _del(File).where(File.id.in_(ids))
-
-
-async def user_root_usage(db: AsyncSession, user_id: uuid.UUID) -> int:
-    return await storage_used(db, user_id)

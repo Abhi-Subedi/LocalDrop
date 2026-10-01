@@ -39,15 +39,16 @@ async def _issue_setup_token(db: AsyncSession) -> str:
 
 
 async def get_or_issue_setup_token(db: AsyncSession) -> str | None:
-    """Return a valid existing token or issue one. None if onboarding done."""
+    """Issue a fresh setup token. None if onboarding is done.
+
+    Only ONE token is valid at a time: each issuance replaces the previous
+    row, so the console print and the /setup/token endpoint share
+    last-writer-wins semantics. Pre-owner the server has no other users, so
+    whoever completes setup first (the installer) wins — complete setup
+    immediately after first boot.
+    """
     if not await onboarding_required(db):
         return None
-    row = await db.get(Setting, SETUP_TOKEN_KEY)
-    now = datetime.now(UTC)
-    if row is not None:
-        expires = datetime.fromisoformat(row.value["expires"])
-        if now < expires:
-            return None  # token already printed and still valid — don't leak another
     return await _issue_setup_token(db)
 
 

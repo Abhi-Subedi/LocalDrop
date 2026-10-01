@@ -272,6 +272,35 @@ async def test_upload_interrupted_then_resumed(owner_client):
     assert hashlib.sha256(r.content).hexdigest() == hashlib.sha256(content).hexdigest()
 
 
+@pytest.mark.asyncio
+async def test_upload_binary_content_roundtrip_byte_identical(owner_client):
+    """Regression: Windows CRT text-mode translation must never touch bytes.
+
+    Content covers all 256 byte values (incl. \\n and \\x1a/Ctrl-Z, which a
+    text-mode fd would translate / treat as EOF). Multi-chunk upload must
+    land byte-identical and verify (not go 'missing').
+    """
+    folder = await make_folder(owner_client)
+    content = bytes(range(256)) * 4000  # 1 MiB, every byte value
+    file_id = await tus_upload(owner_client, folder["id"], content, name="binary.bin",
+                               mime="application/octet-stream", chunk_size=524288)
+    r = await owner_client.get(f"/api/v1/files/{file_id}/content", headers=H)
+    assert r.status_code == 200
+    assert r.content == content
+
+    from sqlalchemy import select
+
+    from localdrop.db import SessionFactory
+    from localdrop.models import Blob, File
+    import uuid as _uuid
+
+    async with SessionFactory() as db:
+        f = (await db.execute(select(File).where(File.id == _uuid.UUID(file_id)))).scalar_one()
+        b = (await db.execute(select(Blob).where(Blob.id == f.blob_id))).scalar_one()
+        assert b.status == "verified"
+        assert b.size == len(content)
+
+
 # ---------------- sharing ----------------
 
 

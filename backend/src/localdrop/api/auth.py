@@ -53,11 +53,12 @@ async def setup_status_ep(db: AsyncSession = Depends(get_db)) -> SetupStatus:
 
 @router.get("/setup/token")
 async def setup_token_ep(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
-    """Returns the setup token ONLY while onboarding is pending.
+    """Returns a fresh setup token while onboarding is pending.
 
     V1 posture: on a trusted LAN, first-run onboarding is open to whoever
-    reaches the server first (documented in INSTALLATION). The console also
-    prints the token at startup; both consume the same single-use value.
+    reaches the server first (documented in INSTALLATION). Each call
+    invalidates the previous token (last-writer-wins with the token printed
+    to the server console at startup).
     """
     needed = await accounts.onboarding_required(db)
     if not needed:
