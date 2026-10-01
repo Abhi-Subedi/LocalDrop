@@ -50,6 +50,11 @@ jobs:
         run: |
           echo "Starting a temporary public demo. Do not put anything private in it." >> "$GITHUB_STEP_SUMMARY"
 
+      # Without this the job runs in an empty directory and every later step
+      # fails with "no such file or directory" for a file that is plainly in
+      # the repository. The workflow needs the source to build the image.
+      - uses: actions/checkout@v4
+
       # The image is built from this checkout, not pulled from ghcr.io. A
       # visitor-facing demo must not be able to fail because a container package
       # is private, and building also means the demo always runs the current
