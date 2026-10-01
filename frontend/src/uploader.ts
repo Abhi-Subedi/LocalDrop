@@ -106,12 +106,24 @@ export function pauseUpload(id: string) {
 export async function resumeUpload(id: string) {
   const item = useUploads.getState().items.find((i) => i.id === id)
   if (!item?.upload) return
+  useUploads.getState().update(id, { status: 'uploading', error: undefined })
   item.upload.start()
-  useUploads.getState().update(id, { status: 'uploading' })
 }
 
-export function cancelUpload(id: string) {
+export function retryUpload(id: string) {
+  // tus resumes from the server offset, so retry == resume.
+  resumeUpload(id)
+}
+
+export async function cancelUpload(id: string) {
   const item = useUploads.getState().items.find((i) => i.id === id)
   if (item?.upload && item.status !== 'done') item.upload.abort()
+  const url = item?.upload?.url
   useUploads.getState().update(id, { status: 'cancelled' })
+  if (url) {
+    // Tell the server to drop the session; expiry GC is the backstop.
+    try {
+      await fetch(url, { method: 'DELETE', headers: { 'X-Requested-With': 'localdrop' } })
+    } catch { /* ignored */ }
+  }
 }

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { api, downloadUrl, fmtDate, fmtSize, isImage, type Entry } from '../api'
 import { Button, Input, Modal, entryIcon, useToast } from '../ui'
-import { startUpload, useUploads } from '../uploader'
+import { startUpload, useUploads, pauseUpload, resumeUpload, retryUpload, cancelUpload } from '../uploader'
 
 type DialogState =
   | { kind: 'newFolder' } | { kind: 'rename'; entry: Entry }
@@ -588,6 +588,22 @@ function UploadSheet() {
                       : it.status === 'error' ? 'failed'
                       : it.status}
                   </span>
+                  {(it.status === 'uploading' || it.status === 'paused' || it.status === 'error') && (
+                    <span className="flex shrink-0 items-center gap-1">
+                      {it.status === 'uploading' ? (
+                        <button onClick={() => pauseUpload(it.id)} aria-label={`Pause ${it.name}`}
+                          className="rounded px-1.5 py-0.5 text-xs text-[var(--ld-muted)] underline">Pause</button>
+                      ) : (
+                        <button onClick={() => (it.status === 'error' ? retryUpload(it.id) : resumeUpload(it.id))}
+                          aria-label={`${it.status === 'error' ? 'Retry' : 'Resume'} ${it.name}`}
+                          className="rounded px-1.5 py-0.5 text-xs text-[var(--ld-accent)] underline">
+                          {it.status === 'error' ? 'Retry' : 'Resume'}
+                        </button>
+                      )}
+                      <button onClick={() => cancelUpload(it.id)} aria-label={`Cancel ${it.name}`}
+                        className="rounded px-1.5 py-0.5 text-xs text-[var(--ld-muted)] underline">Cancel</button>
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded bg-[var(--ld-line)]" aria-hidden>
                   <div className="h-full bg-[var(--ld-accent)] transition-all"

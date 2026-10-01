@@ -14,7 +14,11 @@ export function TrashPage() {
   useEffect(() => { load() }, [load])
 
   const restore = async (e: Entry) => {
-    try { await api.post(`/files/${e.id}/restore`); toast(`Restored “${e.name}”`, 'success'); load() }
+    try {
+      if (e.kind === 'folder') await api.post(`/folders/${e.id}/restore`)
+      else await api.post(`/files/${e.id}/restore`)
+      toast(`Restored “${e.name}”`, 'success'); load()
+    }
     catch (err) { toast(String(err), 'error') }
   }
   const purge = async () => {
