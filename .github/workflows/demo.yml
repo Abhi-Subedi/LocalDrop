@@ -40,9 +40,6 @@ concurrency:
   group: demo
   cancel-in-progress: true
 
-env:
-  IMAGE: ghcr.io/abhi-subedi/localdrop:stable
-
 jobs:
   demo:
     name: Public demo
@@ -53,20 +50,18 @@ jobs:
         run: |
           echo "Starting a temporary public demo. Do not put anything private in it." >> "$GITHUB_STEP_SUMMARY"
 
-      # The image is public, so no login is needed. If it has not been published
-      # yet, this step fails with a clear message rather than a pull error.
-      - name: Check the image is published
+      # The image is built from this checkout, not pulled from ghcr.io. A
+      # visitor-facing demo must not be able to fail because a container package
+      # is private, and building also means the demo always runs the current
+      # commit rather than whatever :stable happens to be.
+      - name: Note
         run: |
-          set -euo pipefail
-          if ! docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
-            echo "::error::$IMAGE is not published. Tag a release first (see docs/DEVELOPMENT.md)."
-            exit 1
-          fi
-          echo "Using $IMAGE"
+          echo "Building the image from this checkout; no registry pull is involved." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate a secret key
         run: |
           echo "LOCALDROP_SECRET_KEY=$(python3 -c 'import secrets;print(secrets.token_hex(32))')" >> "$GITHUB_ENV"
+          echo "DEMO_POSTGRES_PASSWORD=$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')" >> "$GITHUB_ENV"
 
       - name: Start the stack in demo mode
         run: |
