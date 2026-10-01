@@ -16,6 +16,22 @@ no vendor lock-in — one server on your network holds your files.
 - **Installs in one command** — Docker, a Linux binary, Homebrew, or a Windows
   installer. A native install needs no database and no container runtime.
 
+## Try it
+
+**There is a live demo.** Open the URL, and you get your own throwaway account
+with an empty file tree — no setup, no password, no configuration. Upload
+something, share it, download it back.
+
+Everything you upload is deleted after an hour, and the whole instance is torn
+down when the workflow ends. It is a demonstration, not a service: see
+[docs/DEMO.md](docs/DEMO.md).
+
+To start one yourself:
+
+```bash
+gh workflow run demo.yml
+```
+
 ## Install
 
 Pick the line for your platform. All of them end with LocalDrop serving on
@@ -123,6 +139,7 @@ single-range resume support. Details: [API.md](docs/API.md).
 | Guide | What |
 |---|---|
 | [INSTALLATION.md](docs/INSTALLATION.md) | Every install method, first-run setup, LAN access, reverse proxy, upgrade |
+| [DEMO.md](docs/DEMO.md) | Running the public demo, and what demo mode does |
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Every environment variable, with defaults |
 | [BACKUP.md](docs/BACKUP.md) | What to back up, `backup.sh` / `restore.sh`, restore drill |
 | [SECURITY.md](docs/SECURITY.md) | Threat model, hardening checklist |

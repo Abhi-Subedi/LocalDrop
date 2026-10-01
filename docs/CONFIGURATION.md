@@ -52,6 +52,33 @@ Every setting arrives as a `LOCALDROP_*` environment variable (12-factor).
 | `LOCALDROP_CORS_ORIGINS` | *(empty)* | Dev only. Comma-separated origins, e.g. `http://localhost:5173` for `npm run dev`. |
 | `LOCALDROP_MDNS_ENABLED` | `false` | Reserved for LAN service advertisement; not used by 1.1.0. |
 
+### Public demo mode
+
+`LOCALDROP_DEMO_MODE` makes LocalDrop safe to expose to the open internet. It is
+**not** a hardening flag for an instance holding real files — see the warning at
+the end of this table.
+
+| Variable | Default | What |
+|---|---|---|
+| `LOCALDROP_DEMO_MODE` | `false` | Enables demo mode. Every visitor gets an isolated throwaway account; the demo endpoints are not even mounted when this is off. |
+| `LOCALDROP_DEMO_MAX_UPLOAD_BYTES` | `26214400` (25 MiB) | Per-visitor upload ceiling. The 100 GiB default would fill a small disk in one request. |
+| `LOCALDROP_DEMO_TTL_MINUTES` | `60` | How long a throwaway account and its files survive after its last request. |
+| `LOCALDROP_DEMO_MAX_USERS` | `200` | Cap on live throwaway accounts, so a crawler cannot fill the users table. Surplus visitors get `503` and a `Retry-After`. |
+| `LOCALDROP_DEMO_CLAIM_WINDOW_MINUTES` | `30` | Grace period after boot during which a human can claim the owner account. Once an owner exists, the demo stops handing out sessions. |
+| `LOCALDROP_DEMO_NOTICE` | *(a sentence)* | Text shown in the in-app banner, so a visitor knows their files are temporary. |
+
+Demo mode also switches the `share`, `content` and `api` rate limits from
+per-IP to per-session. Behind a reverse proxy every visitor shares one client IP,
+so a per-IP budget would be a shared budget: one person's failed logins would
+`429` everybody. The `auth` limit stays per-IP on purpose — there, the socket is
+the signal.
+
+> **Warning.** Demo mode does not make LocalDrop safe to run on the public
+> internet. It makes one narrow, supervised use survivable: a public demo where
+> visitors upload throwaway files that are deleted shortly. A real deployment
+> should still be behind TLS, and `docs/SECURITY.md` explains why.
+
+
 ### Read by the packaging, not by `config.py`
 
 | Variable | Default | What |

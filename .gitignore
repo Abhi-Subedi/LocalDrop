@@ -49,3 +49,9 @@ desktop.ini
 .vscode/
 *.swp
 *.log
+
+# Public demo tunnel (see .github/workflows/demo.yml). Downloaded at run time;
+# a committed copy would be an unexpected 40 MB binary in the repository.
+cloudflared
+tunnel.log
+tunnel.pid

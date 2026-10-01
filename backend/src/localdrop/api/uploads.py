@@ -29,7 +29,7 @@ TUS_RESUMABLE = "1.0.0"
 def _tus_headers(response: Response, offset: int | None = None, expires=None) -> None:
     response.headers["Tus-Resumable"] = TUS_RESUMABLE
     response.headers["Tus-Version"] = TUS_RESUMABLE
-    response.headers["Tus-Max-Size"] = str(get_settings().max_upload_bytes)
+    response.headers["Tus-Max-Size"] = str(get_settings().effective_max_upload_bytes())
     if offset is not None:
         response.headers["Upload-Offset"] = str(offset)
     if expires is not None:
@@ -46,7 +46,7 @@ def _tus_headers(response: Response, offset: int | None = None, expires=None) ->
 async def options_ep(response: Response) -> Response:
     response.headers["Tus-Resumable"] = TUS_RESUMABLE
     response.headers["Tus-Version"] = TUS_RESUMABLE
-    response.headers["Tus-Max-Size"] = str(get_settings().max_upload_bytes)
+    response.headers["Tus-Max-Size"] = str(get_settings().effective_max_upload_bytes())
     response.headers["Tus-Extension"] = "creation,expiration,checksum"
     response.status_code = 204
     return response

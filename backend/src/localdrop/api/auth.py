@@ -74,6 +74,13 @@ async def setup_owner_ep(
     username = accounts.validate_username(body.username)
     user = await accounts.create_owner(db, username, body.password, body.setup_token)
     await db.commit()
+    # In demo mode this is how the operator claims the instance before the demo
+    # starts handing accounts to visitors; afterwards the window is shut.
+    if request.app.state.settings.demo_mode:
+        from ..services import demo
+
+        await demo.mark_claimed(db)
+        await db.commit()
     return UserOut(
         id=user.id,
         username=user.username,
