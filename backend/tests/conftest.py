@@ -20,7 +20,16 @@ from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 os.environ["LOCALDROP_DATA_DIR"] = tempfile.mkdtemp(prefix="localdrop-test-")
-os.environ["LOCALDROP_DATABASE_URL"] = "postgresql+psycopg://postgres@127.0.0.1:5433/localdrop_test"
+
+
+def _test_database_url() -> str:
+    return os.getenv(
+        "LOCALDROP_TEST_DATABASE_URL",
+        "postgresql+psycopg://postgres@127.0.0.1:5433/localdrop_test",
+    )
+
+
+os.environ["LOCALDROP_DATABASE_URL"] = _test_database_url()
 os.environ["LOCALDROP_SECRET_KEY"] = "test-secret-key-0123456789abcdef0123456789abcdef"
 os.environ["LOCALDROP_DEV_MODE"] = "true"
 
