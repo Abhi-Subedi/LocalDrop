@@ -7,12 +7,12 @@
  * - Versioned cache; old caches purged on activate.
  */
 
-const VERSION = 'localdrop-v1';
+const VERSION = 'localdrop-v2';
 const SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/favicon.svg',
+  '/brand-mark.png',
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',

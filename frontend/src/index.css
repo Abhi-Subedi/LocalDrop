@@ -1,115 +1,123 @@
+@import "@fontsource-variable/inter";
 @import "tailwindcss";
 
-/* LocalDrop theme tokens. Every component reads these --ld-* variables,
-   so light/dark/manual-toggle all flow from here. */
+/* LocalDrop visual theme: near-black + white + emerald green + Inter.
+   Every component reads these --ld-* variables, so light/dark/manual-toggle
+   all flow from here. No gradients, no glassmorphism, no neon. */
 
 :root {
-  --ld-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ld-sans: 'Inter Variable', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --ld-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
-  --ld-canvas: #eef2f4;
-  --ld-canvas-tint: rgb(13 125 140 / 0.05);
+  --ld-canvas: #fafafa;
   --ld-surface: #ffffff;
-  --ld-surface-2: #e9eff1;
-  --ld-line: #dbe4e8;
-  --ld-line-strong: #c8d4d9;
-  --ld-text: #0f242a;
-  --ld-muted: #5b6e76;
-  --ld-accent: #0d7d8c;
-  --ld-accent-strong: #0a6774;
+  --ld-surface-2: #f5f5f5;
+  --ld-line: #e5e5e5;
+  --ld-line-strong: #d4d4d4;
+  --ld-text: #171717;
+  --ld-muted: #737373;
+  --ld-accent: #16a34a;
+  --ld-accent-strong: #15803d;
   --ld-accent-ink: #ffffff;
-  --ld-accent-soft: #dcf0f2;
-  --ld-danger: #b4232a;
-  --ld-danger-soft: #fbe4e4;
-  --ld-ok: #15803d;
-  --ld-ok-soft: #dcf3e4;
-  --ld-warn: #b45309;
-  --ld-warn-soft: #fbeed7;
+  --ld-accent-soft: #dcfce7;
+  --ld-danger: #dc2626;
+  --ld-danger-soft: #fee2e2;
+  --ld-ok: #16a34a;
+  --ld-ok-soft: #dcfce7;
+  --ld-warn: #d97706;
+  --ld-warn-soft: #fef3c7;
 
-  --ld-radius: 14px;
-  --ld-shadow-sm: 0 1px 2px rgb(16 38 44 / 0.05), 0 1px 5px rgb(16 38 44 / 0.05);
-  --ld-shadow-md: 0 4px 14px rgb(16 38 44 / 0.09), 0 1px 3px rgb(16 38 44 / 0.07);
-  --ld-shadow-lg: 0 16px 40px rgb(16 38 44 / 0.16), 0 2px 8px rgb(16 38 44 / 0.08);
+  --ld-radius: 12px;
+  --ld-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --ld-shadow-md: 0 2px 8px rgb(0 0 0 / 0.07);
+  --ld-shadow-lg: 0 8px 24px rgb(0 0 0 / 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ld-canvas: #0a0d10;
-    --ld-canvas-tint: rgb(63 195 211 / 0.06);
-    --ld-surface: #131920;
-    --ld-surface-2: #1a222a;
-    --ld-line: #25303a;
-    --ld-line-strong: #33414d;
-    --ld-text: #e8eef1;
-    --ld-muted: #8fa1ab;
-    --ld-accent: #3fc3d3;
-    --ld-accent-strong: #6fd8e4;
-    --ld-accent-ink: #062a30;
-    --ld-accent-soft: #12333a;
-    --ld-danger: #f28181;
-    --ld-danger-soft: #3a1d1d;
-    --ld-ok: #4ade80;
-    --ld-ok-soft: #123a24;
-    --ld-warn: #fbbf24;
-    --ld-warn-soft: #3a2c10;
+    --ld-canvas: #0a0a0a;
+    --ld-surface: #111111;
+    --ld-surface-2: #171717;
+    --ld-line: #262626;
+    --ld-line-strong: #333333;
+    --ld-text: #f5f5f5;
+    --ld-muted: #a3a3a3;
+    --ld-accent: #22c55e;
+    --ld-accent-strong: #16a34a;
+    --ld-accent-ink: #052e12;
+    --ld-accent-soft: #16351f;
+    --ld-danger: #ef4444;
+    --ld-danger-soft: #2a1215;
+    --ld-ok: #22c55e;
+    --ld-ok-soft: #16351f;
+    --ld-warn: #f59e0b;
+    --ld-warn-soft: #2e2210;
 
     --ld-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --ld-shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
-    --ld-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.55);
+    --ld-shadow-md: 0 2px 8px rgb(0 0 0 / 0.45);
+    --ld-shadow-lg: 0 8px 24px rgb(0 0 0 / 0.5);
   }
 }
 
 /* Manual override wins over the media query (declared after it). */
 [data-theme="light"] {
-  --ld-canvas: #eef2f4;
-  --ld-canvas-tint: rgb(13 125 140 / 0.05);
+  --ld-canvas: #fafafa;
   --ld-surface: #ffffff;
-  --ld-surface-2: #e9eff1;
-  --ld-line: #dbe4e8;
-  --ld-line-strong: #c8d4d9;
-  --ld-text: #0f242a;
-  --ld-muted: #5b6e76;
-  --ld-accent: #0d7d8c;
-  --ld-accent-strong: #0a6774;
+  --ld-surface-2: #f5f5f5;
+  --ld-line: #e5e5e5;
+  --ld-line-strong: #d4d4d4;
+  --ld-text: #171717;
+  --ld-muted: #737373;
+  --ld-accent: #16a34a;
+  --ld-accent-strong: #15803d;
   --ld-accent-ink: #ffffff;
-  --ld-accent-soft: #dcf0f2;
-  --ld-danger: #b4232a;
-  --ld-danger-soft: #fbe4e4;
-  --ld-ok: #15803d;
-  --ld-ok-soft: #dcf3e4;
-  --ld-warn: #b45309;
-  --ld-warn-soft: #fbeed7;
+  --ld-accent-soft: #dcfce7;
+  --ld-danger: #dc2626;
+  --ld-danger-soft: #fee2e2;
+  --ld-ok: #16a34a;
+  --ld-ok-soft: #dcfce7;
+  --ld-warn: #d97706;
+  --ld-warn-soft: #fef3c7;
 
-  --ld-shadow-sm: 0 1px 2px rgb(16 38 44 / 0.05), 0 1px 5px rgb(16 38 44 / 0.05);
-  --ld-shadow-md: 0 4px 14px rgb(16 38 44 / 0.09), 0 1px 3px rgb(16 38 44 / 0.07);
-  --ld-shadow-lg: 0 16px 40px rgb(16 38 44 / 0.16), 0 2px 8px rgb(16 38 44 / 0.08);
+  --ld-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --ld-shadow-md: 0 2px 8px rgb(0 0 0 / 0.07);
+  --ld-shadow-lg: 0 8px 24px rgb(0 0 0 / 0.12);
   color-scheme: light;
 }
 
 [data-theme="dark"] {
-  --ld-canvas: #0a0d10;
-  --ld-canvas-tint: rgb(63 195 211 / 0.06);
-  --ld-surface: #131920;
-  --ld-surface-2: #1a222a;
-  --ld-line: #25303a;
-  --ld-line-strong: #33414d;
-  --ld-text: #e8eef1;
-  --ld-muted: #8fa1ab;
-  --ld-accent: #3fc3d3;
-  --ld-accent-strong: #6fd8e4;
-  --ld-accent-ink: #062a30;
-  --ld-accent-soft: #12333a;
-  --ld-danger: #f28181;
-  --ld-danger-soft: #3a1d1d;
-  --ld-ok: #4ade80;
-  --ld-ok-soft: #123a24;
-  --ld-warn: #fbbf24;
-  --ld-warn-soft: #3a2c10;
+  --ld-canvas: #0a0a0a;
+  --ld-surface: #111111;
+  --ld-surface-2: #171717;
+  --ld-line: #262626;
+  --ld-line-strong: #333333;
+  --ld-text: #f5f5f5;
+  --ld-muted: #a3a3a3;
+  --ld-accent: #22c55e;
+  --ld-accent-strong: #16a34a;
+  --ld-accent-ink: #052e12;
+  --ld-accent-soft: #16351f;
+  --ld-danger: #ef4444;
+  --ld-danger-soft: #2a1215;
+  --ld-ok: #22c55e;
+  --ld-ok-soft: #16351f;
+  --ld-warn: #f59e0b;
+  --ld-warn-soft: #2e2210;
 
   --ld-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --ld-shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
-  --ld-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.55);
+  --ld-shadow-md: 0 2px 8px rgb(0 0 0 / 0.45);
+  --ld-shadow-lg: 0 8px 24px rgb(0 0 0 / 0.5);
   color-scheme: dark;
+}
+
+/* Theme-aware brand images: show the wordmark/asset that matches the mode. */
+.only-light { display: block; }
+.only-dark { display: none; }
+[data-theme="dark"] .only-light { display: none; }
+[data-theme="dark"] .only-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .only-light { display: none; }
+  :root:not([data-theme]) .only-dark { display: block; }
 }
 
 html {
@@ -118,11 +126,7 @@ html {
 }
 
 body {
-  /* Calm canvas with a faint accent glow — depth without gradients everywhere. */
-  background:
-    radial-gradient(1200px 480px at 50% -10%, var(--ld-canvas-tint), transparent 70%),
-    var(--ld-canvas);
-  background-attachment: fixed;
+  background: var(--ld-canvas);
   color: var(--ld-text);
   font-family: var(--ld-sans);
   font-size: 15px;

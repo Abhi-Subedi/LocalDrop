@@ -10,36 +10,28 @@ import {
 } from 'lucide-react'
 import type { Entry } from './api'
 
-/** LocalDrop brand mark: teal rounded square + white drop/arrow. */
+/** LocalDrop brand mark: leaf chip on near-black (works on both themes). */
 export function Logo({ size = 28, className = '' }: { size?: number; className?: string }) {
   return (
-    <svg
+    <img
+      src="/brand-mark.png"
       width={size}
       height={size}
-      viewBox="0 0 512 512"
-      role="img"
-      aria-label="LocalDrop"
-      className={className}
-    >
-      <rect width="512" height="512" rx="115" fill="var(--ld-accent)" />
-      <circle cx="256" cy="215" r="95" fill="var(--ld-accent-ink)" />
-      <rect x="235" y="155" width="42" height="105" fill="var(--ld-accent)" />
-      <path d="M203 255h106l-53 55z" fill="var(--ld-accent)" />
-      <rect x="171" y="352" width="170" height="32" rx="16" fill="var(--ld-accent-ink)" />
-    </svg>
+      alt="LocalDrop"
+      className={`shrink-0 select-none ${className}`}
+      style={{ width: size, height: size }}
+      draggable={false}
+    />
   )
 }
 
-/** Logo + wordmark lockup for auth screens and the sidebar. */
-export function LogoLockup({ size = 34, tagline }: { size?: number; tagline?: string }) {
+/** Full "localdrop" wordmark, theme-aware (white on dark / near-black on light). */
+export function LogoWordmark({ height = 30, className = '' }: { height?: number; className?: string }) {
   return (
-    <div className="flex items-center gap-3">
-      <Logo size={size} />
-      <div className="leading-tight">
-        <div className="font-bold tracking-tight" style={{ fontSize: size * 0.62 }}>LocalDrop</div>
-        {tagline && <div className="text-xs text-[var(--ld-muted)]">{tagline}</div>}
-      </div>
-    </div>
+    <span className={`inline-block ${className}`} style={{ height }}>
+      <img src="/logo-on-light.png" alt="LocalDrop" className="only-light h-full w-auto select-none" draggable={false} />
+      <img src="/logo-on-dark.png" alt="LocalDrop" className="only-dark h-full w-auto select-none" draggable={false} />
+    </span>
   )
 }
 

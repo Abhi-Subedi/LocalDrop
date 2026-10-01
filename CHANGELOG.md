@@ -62,6 +62,10 @@ First usable release: a single-owner, self-hosted file drop box.
 
 ### Added
 
+- **New brand identity:** leaf logo + wordmark assets replace the teal mark;
+  emerald-green (`#22C55E`) accent, near-black dark theme and neutral light
+  theme per the visual spec, self-hosted Inter font (works offline on LAN),
+  regenerated favicons/PWA icons/manifest, service-worker cache bumped.
 - **Drive-style app layout:** top bar with global search + theme toggle +
   account menu, sidebar with "New" (upload/new folder) menu and pill
   navigation, file browser as a table with Name/Size/Modified columns
