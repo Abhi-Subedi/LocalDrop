@@ -349,6 +349,13 @@ jobs:
 
       - name: Commit VERSION and the formula
         if: steps.brew.outputs.changed == 'true'
+        # Tolerated failure on purpose. `main` requires a pull request and does
+        # not exempt GITHUB_TOKEN, so this push is rejected — and it should be.
+        # The alternative is adding the Actions app as a bypass actor, which
+        # would let any workflow write to main unattended. VERSION and the
+        # formula are derived conveniences: the release is already published
+        # without them, and a maintainer lands the commit with the next PR.
+        continue-on-error: true
         run: |
           set -euo pipefail
           echo "${{ needs.prepare.outputs.version }}" > VERSION
@@ -360,7 +367,13 @@ jobs:
             echo "nothing to commit"
           else
             git commit -m "chore(release): ${{ needs.prepare.outputs.version }} VERSION + formula"
-            git push origin HEAD:main
+            if ! git push origin HEAD:main; then
+              echo "::warning::could not push VERSION/the formula to main (branch protection)."
+              echo "::warning::The release itself is unaffected. Commit these two files with"
+              echo "::warning::your next PR, or run: gh pr create --title 'chore: 1.1.0 VERSION + formula'"
+              exit 0
+            fi
+            echo "pushed VERSION and the formula to main"
           fi
 
       - name: Push the formula to the Homebrew tap
