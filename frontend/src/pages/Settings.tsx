@@ -22,6 +22,13 @@ interface Pat {
   last_used_at?: string | null
 }
 
+interface BuildInfo {
+  name: string
+  version: string
+  platform: string
+  frozen: boolean
+}
+
 export function SettingsPage() {
   const toast = useToast()
   const [me, setMe] = useState<Me | null>(AuthCtx.current)
@@ -32,6 +39,7 @@ export function SettingsPage() {
   const [newToken, setNewToken] = useState<string | null>(null)
   const [patName, setPatName] = useState('')
   const [patWrite, setPatWrite] = useState(true)
+  const [build, setBuild] = useState<BuildInfo | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +52,11 @@ export function SettingsPage() {
     } catch { /* stays on cached AuthCtx */ }
   }, [])
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    // Public endpoint — works even if /me fails, so the About panel always
+    // reports the real build the operator is actually running.
+    api.get<BuildInfo>('/version').then(setBuild).catch(() => { /* offline */ })
+  }, [])
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault()
@@ -179,7 +192,14 @@ export function SettingsPage() {
         <Card className="p-4">
           <h2 className="mb-1 text-sm font-semibold">About</h2>
           <p className="text-sm text-[var(--ld-muted)]">
-            LocalDrop v1.0.0 — self-hosted, local-network-first file sharing. Licensed AGPL-3.0.
+            {build ? `${build.name} v${build.version}` : 'LocalDrop'} — self-hosted,
+            local-network-first file sharing. Licensed AGPL-3.0.
+          </p>
+          <p className="mt-1 text-xs text-[var(--ld-muted)]">
+            {build ? `Running on ${build.platform}${build.frozen ? ' (single-file build)' : ''}.` : ''}{' '}
+            <a className="underline" href="https://github.com/Abhi-Subedi/LocalDrop" target="_blank" rel="noreferrer noopener">
+              Source &amp; releases
+            </a>
           </p>
         </Card>
       </div>
