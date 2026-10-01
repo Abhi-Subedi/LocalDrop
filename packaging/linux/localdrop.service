@@ -1,0 +1,69 @@
+# LocalDrop — system service.
+#
+# Installed by install.sh (or your package manager of choice) to
+# /etc/systemd/system/localdrop.service. Configuration lives in
+# /etc/localdrop/localdrop.env; the data directory is /var/lib/localdrop.
+#
+#   systemctl start|stop|restart|status localdrop
+#   journalctl -u localdrop -f
+#
+# By default no database is configured, so the service starts its own embedded
+# PostgreSQL cluster inside the data directory. Set LOCALDROP_DATABASE_URL in
+# /etc/localdrop/localdrop.env to use an existing PostgreSQL instead.
+
+[Unit]
+Description=LocalDrop — self-hosted file sharing
+Documentation=https://github.com/Abhi-Subedi/LocalDrop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=localdrop
+Group=localdrop
+WorkingDirectory=/var/lib/localdrop
+EnvironmentFile=-/etc/localdrop/localdrop.env
+
+# --no-browser: there is no display on a server. The setup token is printed in
+# the journal (and readable at /api/v1/setup/token once the app is up).
+ExecStart=/usr/local/bin/localdrop --no-browser
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+
+# Large uploads mean many concurrent sockets and file descriptors.
+LimitNOFILE=65536
+LimitNPROC=512
+
+# --- sandboxing ---------------------------------------------------------
+# The service only ever writes to its own data directory.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RemoveIPC=true
+ReadWritePaths=/var/lib/localdrop
+StateDirectory=localdrop
+RuntimeDirectory=localdrop
+
+# Structured logs to the journal; the launcher already defaults to console.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=localdrop
+
+[Install]
+WantedBy=multi-user.target

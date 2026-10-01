@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LocalDrop launchd daemon.
+
+  install.sh substitutes @UID@, @DATA_DIR@, @BINARY@ and @VERSION@ and writes
+  the result to /Library/LaunchDaemons/io.github.abhisubedi.localdrop.plist.
+  It is a system-wide daemon: the server is expected to be reachable from every
+  device on the network, not just from the logged-in user's session.
+
+    sudo launchctl bootstrap system /Library/LaunchDaemons/io.github.abhisubedi.localdrop.plist
+    sudo launchctl kickstart -k system/io.github.abhisubedi.localdrop
+    sudo log show --predicate 'process == "localdrop"' --last 5m
+
+  Why KeepAlive rather than RunAtLoad only: if the embedded PostgreSQL or the
+  web server crashes, launchd should bring the whole thing back.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.github.abhisubedi.localdrop</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@BINARY@</string>
+        <string>--no-browser</string>
+    </array>
+
+    <key>UserName</key>
+    <string>localdrop</string>
+    <key>GroupName</key>
+    <string>staff</string>
+
+    <key>WorkingDirectory</key>
+    <string>@DATA_DIR@</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>LOCALDROP_DATA_DIR</key>
+        <string>@DATA_DIR@</string>
+        <!-- Edit /etc/localdrop/localdrop.env for the full reference; launchd
+             does not read EnvironmentFile, so install.sh copies the values
+             below into this dict at install time. -->
+        <key>LOCALDROP_SECRET_KEY</key>
+        <string>SET_BY_INSTALLER</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>@DATA_DIR@/localdrop.log</string>
+    <key>StandardErrorPath</key>
+    <string>@DATA_DIR@/localdrop.err.log</string>
+
+    <key>ExitTimeOut</key>
+    <integer>30</integer>
+</dict>
+</plist>
