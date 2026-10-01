@@ -128,7 +128,25 @@ jobs:
             echo "Runner: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Demo URL: $url"
-          curl -fsS -o /dev/null -w 'tunnel responds: %{http_code}\n' "$url/api/v1/health/live"
+
+          # Probe through the tunnel, but tolerate DNS propagation. A quick
+          # tunnel's hostname does not resolve the instant cloudflared prints
+          # it, and `set -e` turned a few seconds of propagation into a failed
+          # job — after the demo was already up and the URL already printed.
+          reachable=0
+          for i in $(seq 1 15); do
+            if curl -fsS --max-time 10 -o /dev/null -w 'tunnel responds: %{http_code}\n' \
+                 "$url/api/v1/health/live"; then
+              reachable=1; break
+            fi
+            echo "  not resolvable yet (attempt $i); waiting for DNS"
+            sleep 4
+          done
+          if [ "$reachable" -ne 1 ]; then
+            echo "::warning::could not reach the tunnel from this runner."
+            echo "::warning::The URL above is live — this is usually just local DNS."
+            echo "::warning::Verify it from your own machine: $url/api/v1/health/live"
+          fi
 
       # Hold the tunnel open so there is a window in which to use it. The job
       # timeout and this sleep are set from the same input; the workflow cannot
