@@ -299,14 +299,70 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
+      # Fetch each artifact's zip directly rather than through
+      # actions/download-artifact. That action failed four times in a row on
+      # this release with "artifact download failed after 5 retries" even though
+      # every artifact was present, unexpired and intact — roughly 240 MB across
+      # six artifacts is past the point where it is dependable.
+      #
+      # Doing it by hand is not more code, it is more control: each artifact gets
+      # its own retry budget and its own error message, so a failure names the
+      # culprit instead of arriving as one opaque error.
       - name: Download every artefact
-        uses: actions/download-artifact@v4
-        with:
-          path: dist/release
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release work
 
-      - name: List what we are about to publish
-        run: ls -la dist/release/
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+                  --jq '.artifacts[] | select(.name | startswith("binary-")) | "\(.id) \(.name)"')
+          if [ -z "$ids" ]; then
+            echo "::error::no binary-* artifacts found on this run"; exit 1
+          fi
+          echo "$ids" | sed 's/^/  will fetch: /'
+
+          for id in $ids; do
+            zip="work/artifact-$id.zip"
+            ok=0
+            for attempt in 1 2 3 4 5; do
+              if gh api -H "Accept: application/vnd.github+json" \
+                    "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$zip"; then
+                ok=1; break
+              fi
+              echo "  attempt $attempt for artifact $id failed; retrying"
+              sleep $((attempt * 5))
+            done
+            [ "$ok" -eq 1 ] || { echo "::error::artifact $id failed 5 times"; exit 1; }
+            unzip -oq "$zip" -d "work/unpacked-$id"
+            rm -f "$zip"
+            echo "  artifact $id -> $(find "work/unpacked-$id" -type f | wc -l) file(s)"
+          done
+
+          find work -type f -exec cp {} dist/release/ \;
+          rm -rf work
+
+      - name: Collect them into one directory
+        run: |
+          set -euo pipefail
+          echo "collected:"; ls -la dist/release/
+          # Every platform must have contributed its archive, or the checksums
+          # and the release would silently ship an incomplete set. A release with
+          # four of five platforms is worse than a failed build.
+          missing=""
+          for slug in linux-x64 linux-arm64 macos-x64 macos-arm64; do
+            [ -f "dist/release/localdrop-${{ needs.prepare.outputs.version }}-$slug.tar.gz" ] \
+              || missing="$missing $slug"
+          done
+          [ -f "dist/release/LocalDrop-${{ needs.prepare.outputs.version }}-windows-x64.zip" ] \
+            || missing="$missing windows-zip"
+          [ -f "dist/release/LocalDrop-${{ needs.prepare.outputs.version }}-windows-x64-setup.exe" ] \
+            || missing="$missing windows-installer"
+          if [ -n "$missing" ]; then
+            echo "::error::missing artefacts:$missing"; exit 1
+          fi
+          echo "all six artefacts present"
 
       - name: SHA256SUMS
         run: |
