@@ -22,7 +22,7 @@ jobs:
   # ---- fast feedback: things that need no services -------------------------
   lint:
     name: Lint & types
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend
@@ -49,7 +49,7 @@ jobs:
 
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -79,7 +79,7 @@ jobs:
 
   docs-sync:
     name: Docs & release metadata
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -108,7 +108,7 @@ jobs:
   # ---- the suite that needs PostgreSQL -------------------------------------
   test:
     name: Tests (postgres ${{ matrix.postgres }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -158,7 +158,7 @@ jobs:
   # ---- packaging must stay buildable ---------------------------------------
   package:
     name: Frozen binary builds
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -188,7 +188,7 @@ jobs:
 
   docker:
     name: Docker image builds
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -211,16 +211,69 @@ jobs:
       - name: The image must report a healthy version
         run: |
           set -euo pipefail
-          cid=$(docker run -d -p 18080:8080 \
-            -e LOCALDROP_DEV_MODE=true \
-            -e LOCALDROP_DATABASE_URL='postgresql+psycopg://x@127.0.0.1:1/none' \
-            localdrop:ci)
-          # The server boots and serves /api/v1/version even when the database
-          # is unreachable; that is enough to prove the image is wired up.
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:18080/api/v1/version; then
-              echo; echo "image serves /api/v1/version"; docker rm -f "$cid"; exit 0
-            fi
+
+          # 1. The bundle is intact: every packaged resource, the C extensions
+          #    and the app factory. This is the same check the release pipeline
+          #    gates on, run against the image.
+          echo "--- bundle self-check ---"
+          docker run --rm --entrypoint localdrop localdrop:ci --check
+
+          # 2. The container actually serves traffic. This needs a real database,
+          #    because the entrypoint deliberately aborts when migrations cannot
+          #    run — an earlier version of this step pointed at an unreachable
+          #    database and asserted the app would come up anyway, which is not
+          #    how the container behaves and never was.
+          echo "--- boot against a real database ---"
+          docker network create ld-smoke
+          docker run -d --name pg --network ld-smoke \
+            -e POSTGRES_PASSWORD=ci-smoke -e POSTGRES_DB=localdrop \
+            postgres:16-alpine
+
+          for i in $(seq 1 60); do
+            if docker exec pg pg_isready -U postgres -d localdrop >/dev/null 2>&1; then break; fi
+            [ "$i" -eq 60 ] && { echo "postgres never became ready"; exit 1; }
             sleep 1
           done
-          echo "image did not serve /api/v1/version"; docker logs "$cid"; docker rm -f "$cid"; exit 1
+
+          key=$(python3 -c 'import secrets;print(secrets.token_hex(32))')
+          docker run -d --name app --network ld-smoke -p 18080:8080 \
+            -e LOCALDROP_SECRET_KEY="$key" \
+            -e LOCALDROP_DATABASE_URL='postgresql+psycopg://postgres:ci-smoke@pg:5432/localdrop' \
+            localdrop:ci
+
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18080/api/v1/health/ready; then
+              echo; ok=1; break
+            fi
+            sleep 2
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::the container never reported ready"
+            docker logs app || true
+            docker logs pg || true
+            exit 1
+          fi
+
+          # The container must report the version the *source* declares. Not the
+          # LOCALDROP_VERSION build arg: that exists to stamp the OCI label, and
+          # the running server truthfully reports the code it was built from.
+          # Comparing against __about__.py is also the useful check — it fails
+          # if the image is stale, or if the version is baked in twice.
+          #
+          # sed rather than a multi-line `python3 -c`: continuation lines at
+          # column 0 terminate the YAML block scalar, and that failure is
+          # baffling because the workflow file still looks like YAML.
+          want=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' backend/src/localdrop/__about__.py)
+          [ -n "$want" ] || { echo "::error::could not read __version__ from __about__.py"; exit 1; }
+          version=$(curl -fsS http://127.0.0.1:18080/api/v1/version | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')
+          echo "source says $want · image reports $version"
+          [ "$version" = "$want" ] || { echo "::error::the image reports $version, the source says $want"; exit 1; }
+
+          # The web UI must be served from the bundle, not a 404 or a JSON error.
+          curl -fsS http://127.0.0.1:18080/ | grep -q '<div id="root">'
+
+          docker rm -f app pg >/dev/null
+          docker network rm ld-smoke >/dev/null
+          echo "image builds, self-checks, migrates and serves"

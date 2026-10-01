@@ -1,0 +1,166 @@
+name: Demo
+
+# Publishes a live, interactive LocalDrop so a visitor can try it without
+# installing anything.
+#
+# How it works, and why it is safe to leave running:
+#
+#   * the stack comes up with LOCALDROP_DEMO_MODE=true, so every visitor gets an
+#     isolated throwaway account that is deleted after LOCALDROP_DEMO_TTL_MINUTES;
+#   * a claim window is open for DEMO_CLAIM_WINDOW_MINUTES so the maintainer can
+#     take the owner account before the demo starts serving strangers. Once an
+#     owner exists the demo stops handing out sessions;
+#   * everything is torn down when the job ends, so nothing outlives the run.
+#
+# It is a demonstration, not a service. The URL changes every run and the
+# instance dies with the job. That is the trade: no permanent attack surface
+# against a project whose own SECURITY.md says not to expose it to the internet.
+#
+#   Start it:  gh workflow run demo.yml
+#   The URL is printed in the job summary.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ttl_minutes:
+        description: "Minutes before a visitor's files are deleted"
+        required: false
+        default: "45"
+        type: string
+      keep_alive_hours:
+        description: "How long to hold the tunnel open (max 5 on a free runner)"
+        required: false
+        default: "4"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/abhi-subedi/localdrop:stable
+
+jobs:
+  demo:
+    name: Public demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330   # the ceiling for a GitHub-hosted job
+    steps:
+      - name: Explain what this is
+        run: |
+          echo "Starting a temporary public demo. Do not put anything private in it." >> "$GITHUB_STEP_SUMMARY"
+
+      # The image is public, so no login is needed. If it has not been published
+      # yet, this step fails with a clear message rather than a pull error.
+      - name: Check the image is published
+        run: |
+          set -euo pipefail
+          if ! docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "::error::$IMAGE is not published. Tag a release first (see docs/DEVELOPMENT.md)."
+            exit 1
+          fi
+          echo "Using $IMAGE"
+
+      - name: Generate a secret key
+        run: |
+          echo "LOCALDROP_SECRET_KEY=$(python3 -c 'import secrets;print(secrets.token_hex(32))')" >> "$GITHUB_ENV"
+
+      - name: Start the stack in demo mode
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.demo.yml up -d
+          docker compose -f docker-compose.demo.yml ps
+
+      - name: Wait for readiness
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/health/ready; then echo; break; fi
+            [ "$i" -eq 60 ] && { docker compose -f docker-compose.demo.yml logs app; exit 1; }
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/api/v1/version; echo
+
+      # The claim window exists so a stranger's crawler cannot win the race to
+      # become the owner and lock the maintainer out. The operator runs
+      # scripts/demo-claim.sh against the tunnel URL to take the account.
+      - name: Open the tunnel
+        run: |
+          set -euo pipefail
+          curl -fsSL -o cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+          # --no-autoupdate: the binary is already the latest release.
+          nohup ./cloudflared tunnel --no-autoupdate --url http://localhost:8080 \
+            > tunnel.log 2>&1 &
+          echo $! > tunnel.pid
+
+      - name: Extract the public URL
+        id: url
+        run: |
+          set -euo pipefail
+          url=""
+          for i in $(seq 1 45); do
+            url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' tunnel.log | head -n1 || true)
+            [ -n "$url" ] && break
+            sleep 2
+          done
+          [ -n "$url" ] || { echo "::error::tunnel did not come up"; cat tunnel.log; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Live demo is up"
+            echo
+            echo "**[$url]($url)**"
+            echo
+            echo "A throwaway account is created automatically. Everything you upload is"
+            echo "deleted after ${{ github.event.inputs.ttl_minutes || '45' }} minutes, and the"
+            echo "whole instance disappears when this job ends."
+            echo
+            echo "To take the owner account (and close the demo to new visitors), run:"
+            echo
+            echo '```bash'
+            echo "bash scripts/demo-claim.sh $url"
+            echo '```'
+            echo
+            echo "Runner: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Demo URL: $url"
+          curl -fsS -o /dev/null -w 'tunnel responds: %{http_code}\n' "$url/api/v1/health/live"
+
+      # Hold the tunnel open so there is a window in which to use it. The job
+      # timeout and this sleep are set from the same input; the workflow cannot
+      # outlive a free runner either way.
+      - name: Keep it open
+        run: |
+          hours=${{ github.event.inputs.keep_alive_hours || '4' }}
+          echo "Holding the demo for ${hours}h. Cancel this job to shut it down now."
+          end=$(( $(date +%s) + hours * 3600 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            if ! kill -0 "$(cat tunnel.pid)" 2>/dev/null; then
+              echo "::error::the tunnel process died"; tail -50 tunnel.log; exit 1
+            fi
+            # A quick liveness probe, so a broken demo is visible rather than
+            # silently handing out a dead URL.
+            curl -fsS -o /dev/null "http://127.0.0.1:8080/api/v1/health/live" \
+              || { echo "::error::the app stopped answering"; docker compose -f docker-compose.demo.yml logs app; exit 1; }
+            sleep 60
+          done
+
+      - name: Dump logs if anything failed
+        if: failure()
+        run: |
+          docker compose -f docker-compose.demo.yml logs --no-color | tail -200
+          tail -100 tunnel.log || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          if [ -f tunnel.pid ]; then kill "$(cat tunnel.pid)" 2>/dev/null || true; fi
+          # Volumes too: leaving a demo's files on a shared runner is how one
+          # visitor's upload becomes the next visitor's problem.
+          docker compose -f docker-compose.demo.yml down -v || true
+          rm -f cloudflared tunnel.log tunnel.pid
+          echo "### Demo shut down" >> "$GITHUB_STEP_SUMMARY"

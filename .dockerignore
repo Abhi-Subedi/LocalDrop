@@ -66,3 +66,9 @@ IMPLEMENTATION_PLAN.md
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Public demo tunnel: downloaded at run time, and an unexpected 40 MB binary
+# would bloat the build context for no reason.
+cloudflared
+tunnel.log
+tunnel.pid

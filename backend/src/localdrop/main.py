@@ -97,6 +97,7 @@ async def job_loop(app: FastAPI) -> None:
     from .services.uploads import hash_pending_blobs
     from .storage import get_storage
 
+    s = get_settings()
     tick = 0
     while True:
         try:
@@ -108,6 +109,12 @@ async def job_loop(app: FastAPI) -> None:
                 await hash_pending_blobs(db, storage, max_n=5)
                 if tick % 3 == 0:  # every 30s
                     await generate_thumbnails(db, storage, file_id=None, max_n=4)
+                if tick % 6 == 0 and s.demo_mode:  # every minute
+                    from .services import demo
+
+                    removed = await demo.purge_expired(db)
+                    if removed:
+                        log.info("demo_purged", accounts=removed)
                 if tick % 60 == 0:  # every 10 min
                     await cleanup_pass(db, storage)
                 await db.commit()
@@ -227,6 +234,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(shares_api.router, prefix="/api/v1")
     api.include_router(shares_api.public, prefix="/api/v1")
     app.include_router(api)  # inner includes already carry /api/v1
+
+    if s.demo_mode:
+        # Only mounted in demo mode, so a normal deployment has no demo surface
+        # at all rather than a 404 that advertises one.
+        from .api import demo as demo_api
+
+        app.include_router(demo_api.router, prefix="/api/v1")
+        log.info(
+            "demo_mode_enabled",
+            ttl_minutes=s.demo_ttl_minutes,
+            max_upload_bytes=s.effective_max_upload_bytes(),
+        )
 
     # metrics: authenticated only (spec 05 §2.1 admin-only; V1 single owner).
     # Health probes stay public; point Prometheus at a PAT Bearer token.

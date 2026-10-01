@@ -71,9 +71,40 @@ class Settings(BaseSettings):
 
     # --- ops ---
     log_level: str = "INFO"
-    log_format: str = "json"  # json | dev
+    log_format: str = "json"  # json | dev | console
     dev_mode: bool = False
     cors_origins: list[str] = Field(default_factory=list)  # dev: ["http://localhost:5173"]
+
+    # --- public demo mode ---
+    # Turns LocalDrop into something safe to put on the open internet: every
+    # visitor gets an isolated throwaway account that is deleted after a few
+    # minutes, uploads are capped small, and rate limits are keyed by session
+    # instead of IP so one visitor cannot lock out everyone behind a shared
+    # proxy. Never enable this on an instance holding real files.
+    demo_mode: bool = False
+    # Per-visitor upload ceiling. The 100 GiB default would fill a small disk in
+    # one request; a demo needs to survive a curious visitor.
+    demo_max_upload_bytes: int = 25 * 1024**2
+    # How long a throwaway account and its files survive after its last request.
+    demo_ttl_minutes: int = 60
+    # Hard cap on live throwaway accounts, so a crawler cannot fill the users
+    # table. Surplus visitors get 503 and are asked to try again.
+    demo_max_users: int = 200
+    # Grace period after a runner boots, during which a human can claim the
+    # owner account over the tunnel before the demo claims it. The endpoint
+    # refuses to issue sessions while this is open.
+    demo_claim_window_minutes: int = 30
+    # Injected by the demo workflow so visitors see where they are.
+    demo_notice: str = (
+        "This is a public demo. Your files and account are deleted automatically "
+        "after a few minutes of inactivity, and nothing here is backed up."
+    )
+
+    def effective_max_upload_bytes(self) -> int:
+        """The cap that actually applies, honouring demo mode."""
+        if self.demo_mode and self.max_upload_bytes > self.demo_max_upload_bytes:
+            return self.demo_max_upload_bytes
+        return self.max_upload_bytes
 
     @field_validator("upload_chunk_max_bytes")
     @classmethod

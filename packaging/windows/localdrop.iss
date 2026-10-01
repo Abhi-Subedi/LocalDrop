@@ -33,7 +33,14 @@ VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName} — self-hosted file sharing
-VersionInfoLegalCopyright=AGPL-3.0-only
+; There is no VersionInfoLegalCopyright directive: Inno Setup 6 supports only
+; VersionInfoVersion, VersionInfoTextLocation, VersionInfoCompany,
+; VersionInfoDescription, VersionInfoProductName and VersionInfoProductVersion.
+; The licence travels as the LICENSE file below instead, which is the part that
+; actually matters for AGPL compliance.
+; Fail the build if a Source file is missing, rather than producing an installer
+; with an empty payload that looks fine until someone tries to run it.
+RelativePathCheck=Verify
 
 DefaultDirName={autopf}\LocalDrop
 DefaultGroupName={#AppName}

@@ -43,7 +43,7 @@ jobs:
   # --------------------------------------------------------------------------
   prepare:
     name: Prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.meta.outputs.version }}
       tag: ${{ steps.meta.outputs.tag }}
@@ -89,21 +89,30 @@ jobs:
     name: ${{ matrix.name }}
     needs: prepare
     runs-on: ${{ matrix.os }}
+    # A runner label that no longer exists leaves the job "Waiting for a runner"
+    # until the 6-hour job cap, which stalls the whole release for a long time to
+    # report a typo. 45 minutes is far longer than any of these builds takes
+    # (the slowest observed is the Windows one at ~8 min including the installer)
+    # and turns an unavailable runner into a fast, legible failure.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: linux-x64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             asset: linux-x64
           - name: linux-arm64
-            os: ubuntu-22.04-arm
+            os: ubuntu-24.04-arm
             asset: linux-arm64
+          # macos-13 was retired by GitHub; the Intel runner is now macos-15-intel.
+          # A stale label does not error, it waits forever, so this is worth the
+          # comment.
           - name: macos-x64
-            os: macos-13
+            os: macos-15-intel
             asset: macos-x64
           - name: macos-arm64
-            os: macos-14
+            os: macos-15
             asset: macos-arm64
           - name: windows-x64
             os: windows-2022
@@ -141,14 +150,40 @@ jobs:
         if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
-          # Inno Setup 6 (the preprocessor is required for a stable URL).
-          choco install --no-progress -y innosetup --version "6.4.3"
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+          # Do NOT `choco install innosetup`. Inno Setup is already on the runner
+          # image, and Chocolatey then *refuses* the install because a newer
+          # version is present ("A newer version of InnoSetup is already
+          # installed"), exiting non-zero and taking the job with it. Pinning a
+          # version is worse: the community repository retires exact versions,
+          # so a pin eventually fails a release over nothing to do with LocalDrop.
+          #
+          # Find the compiler that is already there.
+          $iscc = (Get-ChildItem -Path @(
+              "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe",
+              "$env:ProgramFiles\Inno Setup*\ISCC.exe"
+            ) -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1).FullName
+          if (-not $iscc) {
+            throw "ISCC.exe not found. If the runner image stops shipping Inno Setup, " +
+                  "add: choco install innosetup --no-progress -y --allow-downgrade"
+          }
+          Write-Host "Using $iscc"
+
           & $iscc "/DAppVersion=${{ needs.prepare.outputs.version }}" `
                   "packaging\windows\localdrop.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
-          Get-ChildItem dist\release\*.exe | Select-Object Name, Length
+
+          # Inno compiles [Files] globs silently: a wrong relative path yields a
+          # perfectly valid installer with no payload in it. Refuse to publish one.
+          $setup = @(Get-ChildItem dist\release\*-setup.exe -ErrorAction SilentlyContinue)
+          if ($setup.Count -ne 1) { throw "expected exactly one installer, found $($setup.Count)" }
+          $mib = [math]::Round($setup[0].Length / 1MB, 1)
+          $setup[0] | Select-Object Name, @{n='MiB';e={$mib}}
+          if ($mib -lt 20) {
+            throw "the installer is only $mib MiB. The frozen payload did not get in - " +
+                  "check the [Files] paths in localdrop.iss. Do not publish this."
+          }
 
       - name: Collect artefacts
         uses: actions/upload-artifact@v4
@@ -167,7 +202,7 @@ jobs:
   image:
     name: Container image
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -216,13 +251,33 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # A package published with GITHUB_TOKEN is private by default, even for a
+      # public repository, and no token can change that from here. Until someone
+      # clicks "Change visibility -> Public" in the package settings, every
+      # user's `docker compose pull` fails with `denied`. Say so loudly, at the
+      # point where the maintainer is already looking at the run.
+      - name: Remind the maintainer to publish the package
+        run: |
+          {
+            echo "### Image pushed"
+            echo
+            echo '`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}`'
+            echo
+            echo "**If this is the first release, the package is private.**"
+            echo "Until you change that, \`docker compose pull\` fails for everyone"
+            echo "with \`denied\`. One click:"
+            echo
+            echo "1. https://github.com/Abhi-Subedi/LocalDrop/packages"
+            echo "2. Click \`localdrop\` -> **Settings** -> **Change visibility** -> **Public**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # --------------------------------------------------------------------------
   # 3. Checksums, attestation, Homebrew, GitHub Release
   # --------------------------------------------------------------------------
   publish:
     name: Publish release
     needs: [prepare, binary, image]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -294,6 +349,13 @@ jobs:
 
       - name: Commit VERSION and the formula
         if: steps.brew.outputs.changed == 'true'
+        # Tolerated failure on purpose. `main` requires a pull request and does
+        # not exempt GITHUB_TOKEN, so this push is rejected — and it should be.
+        # The alternative is adding the Actions app as a bypass actor, which
+        # would let any workflow write to main unattended. VERSION and the
+        # formula are derived conveniences: the release is already published
+        # without them, and a maintainer lands the commit with the next PR.
+        continue-on-error: true
         run: |
           set -euo pipefail
           echo "${{ needs.prepare.outputs.version }}" > VERSION
@@ -305,7 +367,13 @@ jobs:
             echo "nothing to commit"
           else
             git commit -m "chore(release): ${{ needs.prepare.outputs.version }} VERSION + formula"
-            git push origin HEAD:main
+            if ! git push origin HEAD:main; then
+              echo "::warning::could not push VERSION/the formula to main (branch protection)."
+              echo "::warning::The release itself is unaffected. Commit these two files with"
+              echo "::warning::your next PR, or run: gh pr create --title 'chore: 1.1.0 VERSION + formula'"
+              exit 0
+            fi
+            echo "pushed VERSION and the formula to main"
           fi
 
       - name: Push the formula to the Homebrew tap

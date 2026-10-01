@@ -5,7 +5,7 @@ import {
   Search, Settings, Share2, Sun, Trash2, Upload,
 } from 'lucide-react'
 import { api, fmtSize, type Me } from '../api'
-import { AuthCtx } from '../main'
+import { AuthCtx, DemoCtx } from '../main'
 import { useUploads } from '../uploader'
 import { useUi, requestUpload, requestNewFolder } from '../ui-store'
 import { useTheme } from '../theme'
@@ -62,6 +62,19 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* On a public demo instance, say so before the visitor uploads anything.
+          A visitor who does not know their files will vanish may assume the
+          product is unreliable, which is the opposite of what a demo is for. */}
+      {DemoCtx.info && (
+        <div
+          role="status"
+          className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-[13px] text-amber-800 dark:text-amber-200 md:px-6"
+        >
+          <strong className="font-semibold">Public demo.</strong>{' '}
+          {DemoCtx.info.notice}{' '}
+          Uploads are capped at {Math.round(DemoCtx.info.max_upload_bytes / (1024 * 1024))} MB.
+        </div>
+      )}
       {/* top bar */}
       <header className="pt-safe sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-[var(--ld-line)] bg-[var(--ld-surface)] px-4 md:px-6">
         <Link to="/" className="flex shrink-0 items-center gap-2.5" aria-label="LocalDrop home">

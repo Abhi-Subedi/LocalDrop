@@ -1,0 +1,95 @@
+# Demo stack: the public instance behind the tunnel in .github/workflows/demo.yml
+#
+# Not for normal use. It differs from docker-compose.yml in three ways:
+#
+#   1. LOCALDROP_DEMO_MODE=true - every visitor gets an isolated throwaway
+#      account, deleted after LOCALDROP_DEMO_TTL_MINUTES.
+#   2. Nothing is published to the host except loopback. The tunnel reaches the
+#      app over 127.0.0.1, so the port is never open on the runner's network.
+#   3. A much smaller upload cap, because a demo does not need 100 GiB and a
+#      curious visitor should not be able to fill the runner's disk.
+#
+# It is a separate file on purpose: the production stack must not be one
+# environment variable away from being a public demo.
+#
+#   docker compose -f docker-compose.demo.yml up -d
+
+name: localdrop-demo
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: localdrop
+      POSTGRES_PASSWORD: ${DEMO_POSTGRES_PASSWORD:?set DEMO_POSTGRES_PASSWORD}
+      POSTGRES_DB: localdrop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - ld
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localdrop -d localdrop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  app:
+    image: ${DEMO_IMAGE:-ghcr.io/abhi-subedi/localdrop:stable}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LOCALDROP_DATABASE_URL: postgresql+psycopg://localdrop:${DEMO_POSTGRES_PASSWORD}@postgres:5432/localdrop
+      LOCALDROP_SECRET_KEY: ${LOCALDROP_SECRET_KEY:?set LOCALDROP_SECRET_KEY}
+      LOCALDROP_DATA_DIR: /data
+      LOCALDROP_PORT: 8080
+
+      # --- demo mode ---
+      LOCALDROP_DEMO_MODE: "true"
+      LOCALDROP_DEMO_TTL_MINUTES: ${DEMO_TTL_MINUTES:-45}
+      LOCALDROP_DEMO_MAX_UPLOAD_BYTES: "26214400"   # 25 MiB
+      LOCALDROP_DEMO_MAX_USERS: "200"
+
+      # The tunnel is the only path in, so its X-Forwarded-For is the client.
+      # Rate limits for content/api are per-session, but auth stays per-IP and
+      # needs a real client address to be worth anything.
+      LOCALDROP_TRUSTED_PROXIES: "1"
+      LOCALDROP_LOG_FORMAT: json
+      LOCALDROP_LOG_LEVEL: INFO
+    volumes:
+      - appdata:/data
+    ports:
+      # Bound to loopback on purpose: the cloudflared process on this runner is
+      # the only client that should ever reach it.
+      - "127.0.0.1:8080:8080"
+    networks:
+      - ld
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/api/v1/health/ready || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  pgdata:
+    name: localdrop-demo-pgdata
+  appdata:
+    name: localdrop-demo-appdata
+
+networks:
+  ld:
+    name: localdrop-demo
+    driver: bridge

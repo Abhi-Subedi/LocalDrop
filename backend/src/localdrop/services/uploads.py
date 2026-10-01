@@ -104,8 +104,14 @@ async def create_upload(
 
     if total_size < 0:
         raise validation("total size must be >= 0")
-    if s.max_upload_bytes and total_size > s.max_upload_bytes:
-        raise Problem(413, "too-large", "File Too Large")
+    cap = s.effective_max_upload_bytes()
+    if s.max_upload_bytes and total_size > cap:
+        raise Problem(
+            413,
+            "too-large",
+            "File Too Large",
+            f"Uploads are limited to {cap // (1024**2)} MiB on this server.",
+        )
 
     folder = await get_owned_folder(db, p, folder_id)
 

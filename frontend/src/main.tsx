@@ -16,6 +16,56 @@ import { PublicSharePage } from './pages/PublicShare'
 
 export const AuthCtx = { current: null as Me | null }
 
+// Set when the server is running with LOCALDROP_DEMO_MODE. Read once at boot by
+// DemoGate; the endpoint is a 404 on a normal deployment, so this stays null.
+export const DemoCtx = { info: null as DemoInfo | null }
+
+export interface DemoInfo {
+  accepting_visitors: boolean
+  max_upload_bytes: number
+  ttl_minutes: number
+  notice: string
+}
+
+/**
+ * On a demo instance, hand the visitor a throwaway account automatically.
+ *
+ * The point of a demo is that the first click is *yours*, so the visitor must
+ * not have to find a setup token, read a console log, or invent a password.
+ * One request creates an isolated account and signs them in.
+ */
+function DemoGate({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<'loading' | 'ok' | 'no'>('loading')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const info = await api.get<DemoInfo>('/demo/status')
+        if (cancelled) return
+        DemoCtx.info = info
+        if (!info.accepting_visitors) { setState('no'); return }
+        // Already signed in? Then we are a returning visitor on a live account.
+        try {
+          AuthCtx.current = await api.get<Me>('/me')
+          setState('ok')
+          return
+        } catch { /* not signed in yet: ask for a demo account */ }
+        await api.post('/demo/session')
+        AuthCtx.current = await api.get<Me>('/me')
+        setState('ok')
+      } catch {
+        if (!cancelled) setState('no')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  if (state === 'loading')
+    return <div className="grid min-h-screen place-items-center text-sm text-[var(--ld-muted)]" role="status">Starting your private demo session…</div>
+  return state === 'ok' ? <>{children}</> : <Navigate to="/login" replace />
+}
+
 function RequireAuth({ children }: { children: ReactNode }) {
   const [state, setState] = useState<'loading' | 'ok' | 'no'>('loading')
   useEffect(() => {
@@ -42,7 +92,14 @@ function App() {
           <Route path="/s/:token" element={<PublicSharePage />} />
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<RequireAuth><AppShell /></RequireAuth>}>
+          <Route
+            path="/"
+            element={
+              <DemoGate>
+                <RequireAuth><AppShell /></RequireAuth>
+              </DemoGate>
+            }
+          >
             <Route index element={<FilesPage folderId={null} />} />
             <Route path="files/:folderId" element={<FilesPageWithId />} />
             <Route path="trash" element={<TrashPage />} />

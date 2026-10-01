@@ -9,7 +9,6 @@ import os
 import sys
 import tempfile
 import uuid
-from pathlib import Path
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -20,7 +19,25 @@ from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 os.environ["LOCALDROP_DATA_DIR"] = tempfile.mkdtemp(prefix="localdrop-test-")
-os.environ["LOCALDROP_DATABASE_URL"] = "postgresql+psycopg://postgres@127.0.0.1:5433/localdrop_test"
+# Honour an externally supplied test database, because the default only works on
+# a developer machine with a trust-auth cluster on :5433. CI runs PostgreSQL with
+# a password, and a hard-coded passwordless URL fails there with
+# "fe_sendauth: no password supplied" — which is a confusing way to learn that
+# the suite is not actually pointed at the database CI created.
+#
+#   LOCALDROP_TEST_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/db
+#
+# Or set the parts: LOCALDROP_TEST_PG{,_USER,_PASSWORD,_DB}.
+_TEST_URL = os.environ.get("LOCALDROP_TEST_DATABASE_URL")
+if not _TEST_URL:
+    _pg_host = os.environ.get("LOCALDROP_TEST_PG", "127.0.0.1")
+    _pg_port = os.environ.get("LOCALDROP_TEST_PG_PORT", "5433")
+    _pg_user = os.environ.get("LOCALDROP_TEST_PG_USER", "postgres")
+    _pg_pass = os.environ.get("LOCALDROP_TEST_PG_PASSWORD")
+    _pg_db = os.environ.get("LOCALDROP_TEST_PG_DB", "localdrop_test")
+    _auth = f"{_pg_user}:{_pg_pass}" if _pg_pass else _pg_user
+    _TEST_URL = f"postgresql+psycopg://{_auth}@{_pg_host}:{_pg_port}/{_pg_db}"
+os.environ["LOCALDROP_DATABASE_URL"] = _TEST_URL
 os.environ["LOCALDROP_SECRET_KEY"] = "test-secret-key-0123456789abcdef0123456789abcdef"
 os.environ["LOCALDROP_DEV_MODE"] = "true"
 
@@ -50,20 +67,15 @@ async def app():
     async with engine.begin() as conn:
         await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
 
-    # run alembic in-process (sync API) in a worker thread — the selector loop
-    # cannot spawn subprocesses on Windows
-    def _migrate() -> None:
-        from alembic import command
-        from alembic.config import Config as AlembicConfig
+    # Apply migrations in-process, in a worker thread: Alembic's API is sync, and
+    # the Windows selector loop cannot spawn subprocesses.
+    #
+    # Deliberately calls localdrop.migrate rather than building an AlembicConfig
+    # here. Hand-rolling it meant this file kept a hard-coded path to
+    # alembic.ini, which broke silently when the file moved into the package.
+    from localdrop.migrate import upgrade as _upgrade
 
-        cfg = AlembicConfig(str(Path(__file__).parent.parent / "alembic.ini"))
-        cfg.set_main_option(
-            "script_location",
-            str(Path(__file__).parent.parent / "src" / "localdrop" / "migrations"),
-        )
-        command.upgrade(cfg, "head")
-
-    await asyncio.to_thread(_migrate)
+    await asyncio.to_thread(_upgrade)
     async with LifespanManager(app):
         yield app
 

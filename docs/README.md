@@ -11,6 +11,7 @@ Start with the one that matches what you want to do.
 | Guide | Read it when |
 |---|---|
 | [INSTALLATION.md](INSTALLATION.md) | Installing on any platform, first-run setup, reverse proxies, upgrading, troubleshooting |
+| [DEMO.md](DEMO.md) | The public demo: running one, and what demo mode does |
 | [CONFIGURATION.md](CONFIGURATION.md) | You need to change a setting. Every `LOCALDROP_*` variable, with defaults |
 | [BACKUP.md](BACKUP.md) | Backing up, restoring, or rehearsing a restore |
 | [SECURITY.md](SECURITY.md) | Threat model, what is already defended, how to harden a deployment |
@@ -28,7 +29,7 @@ Written before implementation and kept as the record of why. Read
 ```text
 docs/
 ├── INSTALLATION.md  CONFIGURATION.md  BACKUP.md
-├── SECURITY.md  API.md  DEVELOPMENT.md
+├── SECURITY.md  API.md  DEVELOPMENT.md  DEMO.md
 ├── spec/
 │   ├── 01-product-vision.md           Product vision, problem, users, use cases, principles
 │   ├── 02-requirements.md             Functional + non-functional requirements, roadmap
