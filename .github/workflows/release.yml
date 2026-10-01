@@ -141,14 +141,31 @@ jobs:
         if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
-          # Inno Setup 6 (the preprocessor is required for a stable URL).
-          choco install --no-progress -y innosetup --version "6.4.3"
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+          # Do NOT pin an Inno Setup version. The community repository retires
+          # exact versions, and a pin that no longer resolves fails the release
+          # for a reason that has nothing to do with LocalDrop.
+          choco install --no-progress -y innosetup
+          if ($LASTEXITCODE -ne 0) { throw "could not install Inno Setup" }
+
+          # Discover ISCC rather than hard-coding a path: 6.x installs under
+          # "Inno Setup 6", and a future 7.x would not.
+          $iscc = (Get-ChildItem -Path @(
+              "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe",
+              "$env:ProgramFiles\Inno Setup*\ISCC.exe"
+            ) -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $iscc) { throw "ISCC.exe not found after installing innosetup" }
+          Write-Host "Using $iscc"
+
           & $iscc "/DAppVersion=${{ needs.prepare.outputs.version }}" `
                   "packaging\windows\localdrop.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
-          Get-ChildItem dist\release\*.exe | Select-Object Name, Length
+
+          $setup = Get-ChildItem dist\release\*-setup.exe
+          if (-not $setup) { throw "the installer was not produced" }
+          $setup | Select-Object Name, Length
+          if ($setup.Length -lt 1MB) {
+            throw "the installer is implausibly small ($($setup.Length) bytes) - the payload probably did not get in"
+          }
 
       - name: Collect artefacts
         uses: actions/upload-artifact@v4
@@ -215,6 +232,26 @@ jobs:
             BUILD_DATE=${{ github.event.repository.updated_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # A package published with GITHUB_TOKEN is private by default, even for a
+      # public repository, and no token can change that from here. Until someone
+      # clicks "Change visibility -> Public" in the package settings, every
+      # user's `docker compose pull` fails with `denied`. Say so loudly, at the
+      # point where the maintainer is already looking at the run.
+      - name: Remind the maintainer to publish the package
+        run: |
+          {
+            echo "### Image pushed"
+            echo
+            echo '`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}`'
+            echo
+            echo "**If this is the first release, the package is private.**"
+            echo "Until you change that, \`docker compose pull\` fails for everyone"
+            echo "with \`denied\`. One click:"
+            echo
+            echo "1. https://github.com/Abhi-Subedi/LocalDrop/packages"
+            echo "2. Click \`localdrop\` -> **Settings** -> **Change visibility** -> **Public**"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # --------------------------------------------------------------------------
   # 3. Checksums, attestation, Homebrew, GitHub Release
