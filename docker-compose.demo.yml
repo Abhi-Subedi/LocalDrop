@@ -36,7 +36,17 @@ services:
       start_period: 5s
 
   app:
-    image: ${DEMO_IMAGE:-ghcr.io/abhi-subedi/localdrop:stable}
+    # Built from the checkout rather than pulled from the registry, on purpose.
+    # A demo must not depend on ghcr.io being public: if the maintainer forgets
+    # to flip the package visibility, the published image is private and the demo
+    # dies on `docker pull` — the one thing a visitor-facing demo must not do.
+    # It also means the demo always exercises the current commit.
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        LOCALDROP_VERSION: demo
+    image: localdrop:demo
     restart: unless-stopped
     depends_on:
       postgres:
