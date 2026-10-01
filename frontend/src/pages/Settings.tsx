@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, fmtDate, fmtSize, type Me } from '../api'
 import { AuthCtx } from '../main'
-import { Button, Input, Modal, useToast } from '../ui'
+import { Badge, Button, Card, Input, Modal, PageHeader, useToast } from '../ui'
+import { useTheme, type ThemeMode } from '../theme'
+import { Monitor, Moon, Sun } from 'lucide-react'
 
 interface Session {
   id: string
@@ -84,17 +86,23 @@ export function SettingsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
-      <h1 className="mb-4 text-lg font-semibold">Settings</h1>
+      <PageHeader title="Settings" hint="Account, security, and server details." />
       <div className="flex flex-col gap-4">
-        <section className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4">
+        <Card className="p-4">
           <h2 className="mb-1 text-sm font-semibold">Account</h2>
-          <p className="text-sm text-[var(--ld-muted)]">
-            Signed in as <strong>{me?.username}</strong> ({me?.role}).
-            Storage used: {me ? fmtSize(me.storage_used) : '…'}
+          <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--ld-muted)]">
+            Signed in as <strong className="text-[var(--ld-text)]">{me?.username}</strong>
+            {me && <Badge tone="accent">{me.role}</Badge>}
+            · Storage used: <strong className="text-[var(--ld-text)]">{me ? fmtSize(me.storage_used) : '…'}</strong>
           </p>
-        </section>
+        </Card>
 
-        <section className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4">
+        <Card className="p-4">
+          <h2 className="mb-1 text-sm font-semibold">Appearance</h2>
+          <ThemePicker />
+        </Card>
+
+        <Card className="p-4">
           <h2 className="mb-3 text-sm font-semibold">Change password</h2>
           <form onSubmit={changePassword} className="flex max-w-md flex-col gap-3">
             <label className="text-sm font-medium">Current password
@@ -105,9 +113,9 @@ export function SettingsPage() {
             </label>
             <Button type="submit" variant="secondary">Update password</Button>
           </form>
-        </section>
+        </Card>
 
-        <section className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4">
+        <Card className="p-4">
           <h2 className="mb-1 text-sm font-semibold">Sessions</h2>
           <p className="mb-3 text-sm text-[var(--ld-muted)]">Every device signed in to this server. Revoke any you don&apos;t recognize.</p>
           {sessions.length === 0 ? (
@@ -131,9 +139,9 @@ export function SettingsPage() {
               ))}
             </ul>
           )}
-        </section>
+        </Card>
 
-        <section className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4">
+        <Card className="p-4">
           <h2 className="mb-1 text-sm font-semibold">API tokens</h2>
           <p className="mb-3 text-sm text-[var(--ld-muted)]">For scripts and integrations. Tokens are shown once — copy it now.</p>
           <form onSubmit={createPat} className="mb-3 flex max-w-md flex-wrap items-end gap-2">
@@ -162,18 +170,18 @@ export function SettingsPage() {
               ))}
             </ul>
           )}
-        </section>
+        </Card>
 
-        <section className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4 md:hidden">
+        <Card className="p-4 md:hidden">
           <Button variant="secondary" onClick={logout}>Log out</Button>
-        </section>
+        </Card>
 
-        <section className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4">
+        <Card className="p-4">
           <h2 className="mb-1 text-sm font-semibold">About</h2>
           <p className="text-sm text-[var(--ld-muted)]">
             LocalDrop v1.0.0 — self-hosted, local-network-first file sharing. Licensed AGPL-3.0.
           </p>
-        </section>
+        </Card>
       </div>
 
       {newToken && (
@@ -187,5 +195,35 @@ export function SettingsPage() {
         </Modal>
       )}
     </main>
+  )
+}
+
+function ThemePicker() {
+  const { mode, setMode } = useTheme()
+  const options: { v: ThemeMode; label: string; icon: React.ReactNode }[] = [
+    { v: 'system', label: 'System', icon: <Monitor size={14} aria-hidden /> },
+    { v: 'light', label: 'Light', icon: <Sun size={14} aria-hidden /> },
+    { v: 'dark', label: 'Dark', icon: <Moon size={14} aria-hidden /> },
+  ]
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3">
+      <div className="flex gap-1.5">
+        {options.map(({ v, label, icon }) => (
+          <button
+            key={v}
+            onClick={() => setMode(v)}
+            aria-pressed={mode === v}
+            className={`app-press inline-flex min-h-[34px] items-center gap-1.5 rounded-[10px] border px-3 text-sm font-medium transition-colors ${
+              mode === v
+                ? 'border-[var(--ld-accent)] bg-[var(--ld-accent-soft)] text-[var(--ld-accent)]'
+                : 'border-[var(--ld-line)] text-[var(--ld-muted)] hover:text-[var(--ld-text)]'
+            }`}
+          >
+            {icon} {label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-[var(--ld-muted)]">Light and dark, or follow your system.</p>
+    </div>
   )
 }

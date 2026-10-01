@@ -7,9 +7,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowUp, ChevronRight, Search, Upload, FolderPlus, MoreVertical,
   Pencil, FolderInput, Copy, Trash2, Share2, Download, X, FileText,
+  List, LayoutGrid,
 } from 'lucide-react'
 import { api, downloadUrl, fmtDate, fmtSize, isImage, type Entry } from '../api'
-import { Button, Input, Modal, entryIcon, useToast } from '../ui'
+import {
+  Button, EmptyState, Input, Modal, Segmented, SkeletonGrid, SkeletonList,
+  entryIcon, useToast,
+} from '../ui'
 import { startUpload, useUploads, pauseUpload, resumeUpload, retryUpload, cancelUpload } from '../uploader'
 
 type DialogState =
@@ -34,7 +38,12 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
   const [q, setQ] = useState('')
   const [sort, setSort] = useState('name')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [dialog, setDialog] = useState<DialogState | null>(null) // 
+  const [dialog, setDialog] = useState<DialogState | null>(null) //
+
+  const [view, setView] = useState<'list' | 'grid'>(
+    () => (localStorage.getItem('localdrop-view') === 'grid' ? 'grid' : 'list'),
+  )
+  useEffect(() => { localStorage.setItem('localdrop-view', view) }, [view]) 
 
   const [preview, setPreview] = useState<Entry | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -163,6 +172,15 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
             >
               {SORTS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
             </select>
+            <Segmented
+              ariaLabel="View mode"
+              value={view}
+              onChange={setView}
+              options={[
+                { v: 'list', label: 'List view', icon: <List size={15} aria-hidden /> },
+                { v: 'grid', label: 'Grid view', icon: <LayoutGrid size={15} aria-hidden /> },
+              ]}
+            />
             {folderId && (
               <>
                 <Button variant="secondary" onClick={() => setDialog({ kind: 'newFolder' })} ariaLabel="Create folder">
@@ -211,9 +229,11 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
       {/* body */}
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4">
         {!folderId && (
-          <div className="mb-4 rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4">
+          <div className="mb-4 rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] px-4 py-3.5 shadow-[var(--ld-shadow-sm)]">
             <h1 className="text-base font-semibold">Your folders</h1>
-            <p className="text-sm text-[var(--ld-muted)]">Open a folder to upload and manage files. Drop files anywhere in a folder to upload.</p>
+            <p className="text-sm text-[var(--ld-muted)]">
+              Open a folder to upload and manage files — or just drop files onto it.
+            </p>
           </div>
         )}
 
@@ -224,23 +244,36 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
         )}
 
         {loading ? (
-          <div className="grid place-items-center py-16 text-sm text-[var(--ld-muted)]" role="status">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--ld-line)] border-t-[var(--ld-accent)]" aria-hidden />
-            <span className="mt-3">Loading…</span>
-          </div>
+          view === 'grid' ? <SkeletonGrid /> : <SkeletonList rows={7} />
         ) : error ? (
-          <div className="rounded-xl border border-[var(--ld-danger)] bg-[var(--ld-danger-soft)] p-4 text-sm text-[var(--ld-danger)]" role="alert">
+          <div className="rounded-[var(--ld-radius)] border border-[var(--ld-danger)] bg-[var(--ld-danger-soft)] p-4 text-sm text-[var(--ld-danger)]" role="alert">
             {error}
             <Button variant="secondary" className="ml-3" onClick={() => load()}>Retry</Button>
           </div>
         ) : entries.length === 0 ? (
-          <div className="grid place-items-center py-16 text-center">
-            <p className="text-sm text-[var(--ld-muted)]">
-              {q ? `No results for “${q}”.` : folderId ? 'This folder is empty. Drop files here or use Upload.' : 'No folders yet. Create one to get started.'}
-            </p>
-          </div>
-        ) : (
-          <ul role="listbox" aria-label="Files and folders" aria-multiselectable="true" className="divide-y divide-[var(--ld-line)]">
+          q ? (
+            <EmptyState
+              icon={<Search size={26} aria-hidden />}
+              title={`No results for “${q}”`}
+              hint="Try a different name, or check the spelling."
+            />
+          ) : folderId ? (
+            <EmptyState
+              icon={<Upload size={26} aria-hidden />}
+              title="This folder is empty"
+              hint="Drop files anywhere on this page, or use the Upload button."
+              action={<Button onClick={pickFiles}><Upload size={16} aria-hidden /> Upload files</Button>}
+            />
+          ) : (
+            <EmptyState
+              icon={<FolderPlus size={26} aria-hidden />}
+              title="No folders yet"
+              hint="Folders hold your files. Create the first one to get started."
+              action={<Button onClick={() => setDialog({ kind: 'newFolder' })}><FolderPlus size={16} aria-hidden /> Create folder</Button>}
+            />
+          )
+        ) : view === 'grid' ? (
+          <ul role="listbox" aria-label="Files and folders" aria-multiselectable="true" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {entries.map((entry, idx) => (
               <li
                 key={entry.id}
@@ -254,10 +287,60 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
                   if (e.key === ' ') { e.preventDefault(); onRowClick({ ctrlKey: true } as React.MouseEvent, entry, idx) }
                   if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) setMenuFor(entry.id)
                 }}
-                className={`flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 ${selected.has(entry.id) ? 'bg-[var(--ld-accent-soft)]' : 'hover:bg-[var(--ld-accent-soft)]/50'}`}
+                className={`app-press relative cursor-pointer rounded-[var(--ld-radius)] border bg-[var(--ld-surface)] p-2.5 shadow-[var(--ld-shadow-sm)] transition-colors ${
+                  selected.has(entry.id)
+                    ? 'border-[var(--ld-accent)] ring-2 ring-[var(--ld-accent)]'
+                    : 'border-[var(--ld-line)] hover:border-[var(--ld-line-strong)]'
+                }`}
+              >
+                <div className="relative grid aspect-square place-items-center overflow-hidden rounded-xl bg-[var(--ld-canvas)]">
+                  {isImage(entry) && entry.hash_status === 'verified'
+                    ? <img src={`/api/v1/files/${entry.id}/thumbnail`} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    : entryIcon(entry, 34)}
+                  {entry.kind === 'folder' && (
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/25 to-transparent p-1.5 text-[11px] font-medium text-white">
+                      Folder
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 truncate text-sm font-medium" title={entry.name}>{entry.name}</p>
+                <p className="text-xs text-[var(--ld-muted)]">
+                  {entry.kind === 'file' ? fmtSize(entry.size) : 'Folder'}
+                  {entry.hash_status === 'pending' && ' · verifying…'}
+                </p>
+                <div className="absolute right-1.5 top-1.5" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setMenuFor(menuFor === entry.id ? null : entry.id)}
+                    aria-label={`Actions for ${entry.name}`}
+                    aria-expanded={menuFor === entry.id}
+                    className="app-press grid h-8 w-8 place-items-center rounded-lg bg-[var(--ld-surface)]/90 text-[var(--ld-muted)] shadow-[var(--ld-shadow-sm)] backdrop-blur hover:text-[var(--ld-text)]"
+                  >
+                    <MoreVertical size={15} aria-hidden />
+                  </button>
+                  {menuFor === entry.id && <EntryMenu entry={entry} close={() => setMenuFor(null)} setDialog={setDialog} setPreview={setPreview} />}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul role="listbox" aria-label="Files and folders" aria-multiselectable="true" className="divide-y divide-[var(--ld-line)] overflow-hidden rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-[var(--ld-shadow-sm)]">
+            {entries.map((entry, idx) => (
+              <li
+                key={entry.id}
+                role="option"
+                aria-selected={selected.has(entry.id)}
+                tabIndex={0}
+                onClick={(e) => onRowClick(e, entry, idx)}
+                onContextMenu={(e) => { e.preventDefault(); setMenuFor(entry.id) }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { entry.kind === 'folder' ? nav(`/files/${entry.id}`) : setPreview(entry) }
+                  if (e.key === ' ') { e.preventDefault(); onRowClick({ ctrlKey: true } as React.MouseEvent, entry, idx) }
+                  if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) setMenuFor(entry.id)
+                }}
+                className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors ${selected.has(entry.id) ? 'bg-[var(--ld-accent-soft)]' : 'hover:bg-[var(--ld-accent-soft)]/50'}`}
               >
                 {isImage(entry) && entry.hash_status === 'verified'
-                  ? <img src={`/api/v1/files/${entry.id}/thumbnail`} alt="" loading="lazy" className="h-10 w-10 rounded object-cover" />
+                  ? <img src={`/api/v1/files/${entry.id}/thumbnail`} alt="" loading="lazy" className="h-10 w-10 rounded-lg object-cover" />
                   : <span className="grid h-10 w-10 place-items-center">{entryIcon(entry, 22)}</span>}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium" title={entry.name}>{entry.name}</span>
@@ -563,55 +646,91 @@ function UploadSheet() {
   const items = useUploads((s) => s.items)
   const clearDone = useUploads((s) => s.clearDone)
   const [open, setOpen] = useState(true)
+  const [speeds, setSpeeds] = useState<Record<string, number>>({})
   const active = items.filter((i) => !['done', 'cancelled'].includes(i.status))
+
+  // Transfer speed: sample each uploading item's `sent` once per second.
+  const sentRef = useRef<Record<string, number>>({})
+  useEffect(() => {
+    const t = setInterval(() => {
+      const uploading = items.filter((i) => i.status === 'uploading')
+      setSpeeds(() => {
+        const next: Record<string, number> = {}
+        for (const it of uploading) {
+          const before = sentRef.current[it.id]
+          if (before !== undefined && it.sent >= before) next[it.id] = it.sent - before
+          sentRef.current[it.id] = it.sent
+        }
+        return next
+      })
+    }, 1000)
+    return () => clearInterval(t)
+  }, [items])
+
   if (!items.length) return null
   return (
     <div className="fixed inset-x-0 bottom-16 z-40 mx-auto max-w-md md:bottom-4 md:left-auto md:right-4 md:mx-0" role="region" aria-label="Upload progress">
-      <div className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-xl">
-        <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium">
-          <span>Uploads ({active.length} active)</span>
-          <span className="flex items-center gap-2 text-xs text-[var(--ld-muted)]">
-            {items.some((i) => i.status === 'done') && <button onClick={(e) => { e.stopPropagation(); clearDone() }} className="underline">Clear done</button>}
+      <div className="animate-rise overflow-hidden rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-[var(--ld-shadow-lg)]">
+        <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold">
+          <span>Uploads{active.length > 0 ? ` — ${active.length} active` : ''}</span>
+          <span className="flex items-center gap-3 text-xs font-normal text-[var(--ld-muted)]">
+            {items.some((i) => i.status === 'done' || i.status === 'cancelled') && (
+              <button onClick={(e) => { e.stopPropagation(); clearDone() }} className="font-medium underline hover:text-[var(--ld-text)]">Clear done</button>
+            )}
             {open ? 'Hide' : 'Show'}
           </span>
         </button>
         {open && (
-          <ul className="max-h-64 divide-y divide-[var(--ld-line)] overflow-y-auto border-t border-[var(--ld-line)]" aria-label="Upload items">
-            {items.map((it) => (
-              <li key={it.id} className="px-4 py-2.5 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 flex-1 truncate" title={it.name}>{it.name}</span>
-                  <span className={`text-xs ${it.status === 'error' ? 'text-[var(--ld-danger)]' : 'text-[var(--ld-muted)]'}`}>
-                    {it.status === 'uploading' ? `${Math.round((it.sent / Math.max(it.size, 1)) * 100)}%`
-                      : it.status === 'verifying' ? 'verifying…'
-                      : it.status === 'done' ? 'done ✓'
-                      : it.status === 'error' ? 'failed'
-                      : it.status}
-                  </span>
-                  {(it.status === 'uploading' || it.status === 'paused' || it.status === 'error') && (
-                    <span className="flex shrink-0 items-center gap-1">
-                      {it.status === 'uploading' ? (
-                        <button onClick={() => pauseUpload(it.id)} aria-label={`Pause ${it.name}`}
-                          className="rounded px-1.5 py-0.5 text-xs text-[var(--ld-muted)] underline">Pause</button>
-                      ) : (
-                        <button onClick={() => (it.status === 'error' ? retryUpload(it.id) : resumeUpload(it.id))}
-                          aria-label={`${it.status === 'error' ? 'Retry' : 'Resume'} ${it.name}`}
-                          className="rounded px-1.5 py-0.5 text-xs text-[var(--ld-accent)] underline">
-                          {it.status === 'error' ? 'Retry' : 'Resume'}
-                        </button>
-                      )}
-                      <button onClick={() => cancelUpload(it.id)} aria-label={`Cancel ${it.name}`}
-                        className="rounded px-1.5 py-0.5 text-xs text-[var(--ld-muted)] underline">Cancel</button>
+          <ul className="max-h-72 divide-y divide-[var(--ld-line)] overflow-y-auto border-t border-[var(--ld-line)]" aria-label="Upload items">
+            {items.map((it) => {
+              const pct = it.status === 'done' ? 100 : Math.round((it.sent / Math.max(it.size, 1)) * 100)
+              const speed = speeds[it.id]
+              return (
+                <li key={it.id} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate font-medium" title={it.name}>{it.name}</span>
+                    <span className={`shrink-0 text-xs font-medium ${it.status === 'error' ? 'text-[var(--ld-danger)]' : it.status === 'done' ? 'text-[var(--ld-ok)]' : 'text-[var(--ld-muted)]'}`}>
+                      {it.status === 'uploading' ? `${pct}%`
+                        : it.status === 'verifying' ? 'verifying…'
+                        : it.status === 'done' ? 'Done ✓'
+                        : it.status === 'error' ? 'Failed'
+                        : it.status === 'paused' ? 'Paused'
+                        : it.status}
                     </span>
-                  )}
-                </div>
-                <div className="mt-1 h-1 overflow-hidden rounded bg-[var(--ld-line)]" aria-hidden>
-                  <div className="h-full bg-[var(--ld-accent)] transition-all"
-                    style={{ width: `${it.status === 'done' ? 100 : Math.round((it.sent / Math.max(it.size, 1)) * 100)}%` }} />
-                </div>
-                {it.error && <p className="mt-1 text-xs text-[var(--ld-danger)]">{it.error}</p>}
-              </li>
-            ))}
+                    {(it.status === 'uploading' || it.status === 'paused' || it.status === 'error') && (
+                      <span className="flex shrink-0 items-center gap-1">
+                        {it.status === 'uploading' ? (
+                          <button onClick={() => pauseUpload(it.id)} aria-label={`Pause ${it.name}`}
+                            className="rounded-md px-1.5 py-0.5 text-xs text-[var(--ld-muted)] hover:bg-[var(--ld-surface-2)]">Pause</button>
+                        ) : (
+                          <button onClick={() => (it.status === 'error' ? retryUpload(it.id) : resumeUpload(it.id))}
+                            aria-label={`${it.status === 'error' ? 'Retry' : 'Resume'} ${it.name}`}
+                            className="rounded-md px-1.5 py-0.5 text-xs font-medium text-[var(--ld-accent)] hover:bg-[var(--ld-accent-soft)]">
+                            {it.status === 'error' ? 'Retry' : 'Resume'}
+                          </button>
+                        )}
+                        <button onClick={() => cancelUpload(it.id)} aria-label={`Cancel ${it.name}`}
+                          className="rounded-md px-1.5 py-0.5 text-xs text-[var(--ld-muted)] hover:bg-[var(--ld-surface-2)]">Cancel</button>
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2" aria-hidden>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--ld-surface-2)]">
+                      <div
+                        className={`h-full rounded-full transition-all ${it.status === 'error' ? 'bg-[var(--ld-danger)]' : it.status === 'done' ? 'bg-[var(--ld-ok)]' : 'bg-[var(--ld-accent)]'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-[var(--ld-muted)]">
+                      {it.status === 'uploading' && speed !== undefined && speed > 0
+                        ? `${fmtSize(speed)}/s`
+                        : it.status === 'done' ? '' : `${fmtSize(it.sent)} / ${fmtSize(it.size)}`}
+                    </span>
+                  </div>
+                  {it.error && <p className="mt-1 text-xs text-[var(--ld-danger)]" role="alert">{it.error}</p>}
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>

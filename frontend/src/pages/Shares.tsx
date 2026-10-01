@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, fmtDate, fmtSize, type Share } from '../api'
-import { Button, Input, Modal, useToast } from '../ui'
-import { Copy, Ban } from 'lucide-react'
+import { Badge, Button, EmptyState, Input, Modal, PageHeader, SkeletonList, useToast } from '../ui'
+import { Copy, Ban, Share2 } from 'lucide-react'
 
 export function SharesPage() {
   const [shares, setShares] = useState<Share[]>([])
@@ -15,26 +15,27 @@ export function SharesPage() {
   }, [])
   useEffect(() => { load() }, [load])
 
-  const status = (s: Share): { label: string; cls: string } =>
-    s.revoked_at ? { label: 'Revoked', cls: 'text-[var(--ld-danger)]' }
-    : s.expires_at && new Date(s.expires_at) < new Date() ? { label: 'Expired', cls: 'text-[var(--ld-muted)]' }
-    : { label: 'Active', cls: 'text-[var(--ld-ok)]' }
+  const status = (s: Share): { label: string; tone: 'ok' | 'danger' | 'neutral' } =>
+    s.revoked_at ? { label: 'Revoked', tone: 'danger' }
+    : s.expires_at && new Date(s.expires_at) < new Date() ? { label: 'Expired', tone: 'neutral' }
+    : { label: 'Active', tone: 'ok' }
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
-      <h1 className="mb-4 text-lg font-semibold">Shared links</h1>
-      {loading ? <p className="text-sm text-[var(--ld-muted)]" role="status">Loading…</p>
+      <PageHeader title="Shared links" hint="Public download pages for files on this server." />
+      {loading ? <SkeletonList rows={3} />
         : shares.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-[var(--ld-muted)]">No share links yet.</p>
-            <p className="mt-1 text-sm text-[var(--ld-muted)]">Select a file and press Share to create one.</p>
-          </div>
+          <EmptyState
+            icon={<Share2 size={26} aria-hidden />}
+            title="No share links yet"
+            hint="Select a file in the browser and press Share to create one."
+          />
         ) : (
           <ul className="flex flex-col gap-3">
             {shares.map((s) => {
               const st = status(s)
               return (
-                <li key={s.id} className="rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4">
+                <li key={s.id} className="rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] p-4 shadow-[var(--ld-shadow-sm)]">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{s.file_name || 'file'}</p>
@@ -47,7 +48,7 @@ export function SharesPage() {
                         {s.has_password ? ' · password' : ''}
                       </p>
                     </div>
-                    <span className={`text-xs font-medium ${st.cls}`} role="status">{st.label}</span>
+                    <Badge tone={st.tone}>{st.label}</Badge>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <Input readOnly value={s.url} onFocus={(e) => e.target.select()} aria-label={`Link for ${s.file_name}`} className="!py-1.5 text-xs" />

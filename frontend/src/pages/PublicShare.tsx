@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Button, Input, useToast } from '../ui'
+import { Button, Input, Logo, useToast } from '../ui'
 import { fmtSize } from '../api'
+import { Download, File } from 'lucide-react'
 
 interface Info {
   file_id: string
@@ -53,15 +54,21 @@ export function PublicSharePage() {
 
   return (
     <main className="grid min-h-screen place-items-center p-6">
-      <div className="w-full max-w-sm rounded-2xl border border-[var(--ld-line)] bg-[var(--ld-surface)] p-6 text-center shadow-sm">
-        <h1 className="mb-1 text-lg font-bold">LocalDrop</h1>
+      <div className="animate-rise w-full max-w-sm rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] p-6 text-center shadow-[var(--ld-shadow-md)]">
+        <div className="mb-5 flex items-center justify-center gap-2.5">
+          <Logo size={30} />
+          <span className="text-lg font-bold tracking-tight">LocalDrop</span>
+        </div>
         {error ? (
           <p className="mt-6 text-sm text-[var(--ld-danger)]" role="alert">{error}</p>
         ) : !info ? (
           <p className="mt-6 text-sm text-[var(--ld-muted)]" role="status">Loading…</p>
         ) : (
           <>
-            <p className="mt-4 truncate text-sm font-medium" title={info.file_name}>{info.file_name}</p>
+            <span className="mx-auto mt-2 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--ld-accent-soft)] text-[var(--ld-accent)]">
+              <File size={26} aria-hidden />
+            </span>
+            <p className="mt-3 truncate text-sm font-semibold" title={info.file_name}>{info.file_name}</p>
             <p className="mb-5 text-xs text-[var(--ld-muted)]">{fmtSize(info.file_size)}</p>
             {info.requires_password && !info.unlocked ? (
               <form
@@ -69,12 +76,13 @@ export function PublicSharePage() {
                 className="flex flex-col gap-3"
               >
                 <label className="text-sm font-medium">Password
-                  <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus autoComplete="off" />
+                  <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus autoComplete="off" className="mt-1.5" />
                 </label>
-                <Button type="submit">Unlock & download</Button>
+                <Button type="submit">Unlock &amp; download</Button>
               </form>
             ) : (
               <Button
+                className="w-full"
                 onClick={() => {
                   const a = document.createElement('a')
                   a.href = `/api/v1/shares/${token}/files/${info.file_id}/content`
@@ -83,10 +91,11 @@ export function PublicSharePage() {
                   a.click()
                   a.remove()
                 }}
-              >Download</Button>
+              ><Download size={16} aria-hidden /> Download</Button>
             )}
           </>
         )}
+        <p className="mt-6 text-[11px] text-[var(--ld-muted)]">Shared securely from a private LocalDrop server.</p>
       </div>
     </main>
   )

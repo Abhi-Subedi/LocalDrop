@@ -7,16 +7,18 @@
   --ld-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --ld-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
-  --ld-canvas: #f2f5f6;
+  --ld-canvas: #eef2f4;
+  --ld-canvas-tint: rgb(13 125 140 / 0.05);
   --ld-surface: #ffffff;
   --ld-surface-2: #e9eff1;
-  --ld-line: #dde5e8;
-  --ld-text: #10262c;
-  --ld-muted: #5d7078;
+  --ld-line: #dbe4e8;
+  --ld-line-strong: #c8d4d9;
+  --ld-text: #0f242a;
+  --ld-muted: #5b6e76;
   --ld-accent: #0d7d8c;
   --ld-accent-strong: #0a6774;
   --ld-accent-ink: #ffffff;
-  --ld-accent-soft: #dcefF2;
+  --ld-accent-soft: #dcf0f2;
   --ld-danger: #b4232a;
   --ld-danger-soft: #fbe4e4;
   --ld-ok: #15803d;
@@ -25,23 +27,25 @@
   --ld-warn-soft: #fbeed7;
 
   --ld-radius: 14px;
-  --ld-shadow-sm: 0 1px 2px rgb(16 38 44 / 0.06), 0 1px 6px rgb(16 38 44 / 0.05);
-  --ld-shadow-md: 0 4px 14px rgb(16 38 44 / 0.1), 0 1px 3px rgb(16 38 44 / 0.08);
-  --ld-shadow-lg: 0 12px 32px rgb(16 38 44 / 0.16), 0 2px 6px rgb(16 38 44 / 0.1);
+  --ld-shadow-sm: 0 1px 2px rgb(16 38 44 / 0.05), 0 1px 5px rgb(16 38 44 / 0.05);
+  --ld-shadow-md: 0 4px 14px rgb(16 38 44 / 0.09), 0 1px 3px rgb(16 38 44 / 0.07);
+  --ld-shadow-lg: 0 16px 40px rgb(16 38 44 / 0.16), 0 2px 8px rgb(16 38 44 / 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ld-canvas: #0b0e11;
-    --ld-surface: #13181d;
-    --ld-surface-2: #1b2229;
-    --ld-line: #263239;
-    --ld-text: #e9eff2;
-    --ld-muted: #93a5ae;
+    --ld-canvas: #0a0d10;
+    --ld-canvas-tint: rgb(63 195 211 / 0.06);
+    --ld-surface: #131920;
+    --ld-surface-2: #1a222a;
+    --ld-line: #25303a;
+    --ld-line-strong: #33414d;
+    --ld-text: #e8eef1;
+    --ld-muted: #8fa1ab;
     --ld-accent: #3fc3d3;
     --ld-accent-strong: #6fd8e4;
     --ld-accent-ink: #062a30;
-    --ld-accent-soft: #12353c;
+    --ld-accent-soft: #12333a;
     --ld-danger: #f28181;
     --ld-danger-soft: #3a1d1d;
     --ld-ok: #4ade80;
@@ -51,22 +55,24 @@
 
     --ld-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --ld-shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
-    --ld-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+    --ld-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.55);
   }
 }
 
 /* Manual override wins over the media query (declared after it). */
 [data-theme="light"] {
-  --ld-canvas: #f2f5f6;
+  --ld-canvas: #eef2f4;
+  --ld-canvas-tint: rgb(13 125 140 / 0.05);
   --ld-surface: #ffffff;
   --ld-surface-2: #e9eff1;
-  --ld-line: #dde5e8;
-  --ld-text: #10262c;
-  --ld-muted: #5d7078;
+  --ld-line: #dbe4e8;
+  --ld-line-strong: #c8d4d9;
+  --ld-text: #0f242a;
+  --ld-muted: #5b6e76;
   --ld-accent: #0d7d8c;
   --ld-accent-strong: #0a6774;
   --ld-accent-ink: #ffffff;
-  --ld-accent-soft: #dcefF2;
+  --ld-accent-soft: #dcf0f2;
   --ld-danger: #b4232a;
   --ld-danger-soft: #fbe4e4;
   --ld-ok: #15803d;
@@ -74,23 +80,25 @@
   --ld-warn: #b45309;
   --ld-warn-soft: #fbeed7;
 
-  --ld-shadow-sm: 0 1px 2px rgb(16 38 44 / 0.06), 0 1px 6px rgb(16 38 44 / 0.05);
-  --ld-shadow-md: 0 4px 14px rgb(16 38 44 / 0.1), 0 1px 3px rgb(16 38 44 / 0.08);
-  --ld-shadow-lg: 0 12px 32px rgb(16 38 44 / 0.16), 0 2px 6px rgb(16 38 44 / 0.1);
+  --ld-shadow-sm: 0 1px 2px rgb(16 38 44 / 0.05), 0 1px 5px rgb(16 38 44 / 0.05);
+  --ld-shadow-md: 0 4px 14px rgb(16 38 44 / 0.09), 0 1px 3px rgb(16 38 44 / 0.07);
+  --ld-shadow-lg: 0 16px 40px rgb(16 38 44 / 0.16), 0 2px 8px rgb(16 38 44 / 0.08);
   color-scheme: light;
 }
 
 [data-theme="dark"] {
-  --ld-canvas: #0b0e11;
-  --ld-surface: #13181d;
-  --ld-surface-2: #1b2229;
-  --ld-line: #263239;
-  --ld-text: #e9eff2;
-  --ld-muted: #93a5ae;
+  --ld-canvas: #0a0d10;
+  --ld-canvas-tint: rgb(63 195 211 / 0.06);
+  --ld-surface: #131920;
+  --ld-surface-2: #1a222a;
+  --ld-line: #25303a;
+  --ld-line-strong: #33414d;
+  --ld-text: #e8eef1;
+  --ld-muted: #8fa1ab;
   --ld-accent: #3fc3d3;
   --ld-accent-strong: #6fd8e4;
   --ld-accent-ink: #062a30;
-  --ld-accent-soft: #12353c;
+  --ld-accent-soft: #12333a;
   --ld-danger: #f28181;
   --ld-danger-soft: #3a1d1d;
   --ld-ok: #4ade80;
@@ -100,7 +108,7 @@
 
   --ld-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --ld-shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
-  --ld-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+  --ld-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.55);
   color-scheme: dark;
 }
 
@@ -110,9 +118,14 @@ html {
 }
 
 body {
-  background: var(--ld-canvas);
+  /* Calm canvas with a faint accent glow — depth without gradients everywhere. */
+  background:
+    radial-gradient(1200px 480px at 50% -10%, var(--ld-canvas-tint), transparent 70%),
+    var(--ld-canvas);
+  background-attachment: fixed;
   color: var(--ld-text);
   font-family: var(--ld-sans);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   text-rendering: optimizeLegibility;
@@ -129,6 +142,11 @@ body {
   outline: 2px solid var(--ld-accent);
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+::selection {
+  background: var(--ld-accent-soft);
+  color: var(--ld-text);
 }
 
 /* Notch / gesture-bar safe areas for the PWA + mobile tabs. */

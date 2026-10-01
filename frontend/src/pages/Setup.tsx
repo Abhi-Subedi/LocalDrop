@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api'
 import { Button, Input, useToast } from '../ui'
 import { Link, useNavigate } from 'react-router-dom'
+import { AuthCard } from './AuthCard'
 
 export function SetupPage() {
   const [token, setToken] = useState('')
@@ -31,25 +32,27 @@ export function SetupPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
-      <h1 className="mb-1 text-2xl font-bold">Welcome to LocalDrop</h1>
-      <p className="mb-6 text-sm text-[var(--ld-muted)]">
-        Create the owner account for this server. The setup token is printed in the
-        server console on first start.
+    <AuthCard wide>
+      <h2 className="mb-1 text-center text-base font-semibold">Create the owner account</h2>
+      <p className="mb-5 text-center text-sm text-[var(--ld-muted)]">
+        The setup token is printed in the server console on first start.
       </p>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <label className="text-sm font-medium">Setup token
-          <Input value={token} onChange={(e) => setToken(e.target.value)} required minLength={8} autoComplete="off" />
+          <Input value={token} onChange={(e) => setToken(e.target.value)} required minLength={8} autoComplete="off" className="mt-1.5 font-mono text-xs" />
         </label>
         <label className="text-sm font-medium">Username
-          <Input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[a-z0-9_.\-]+" autoComplete="username" />
+          <Input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[a-z0-9_.\-]+" autoComplete="username" className="mt-1.5" />
         </label>
         <label className="text-sm font-medium">Password (min 8 chars)
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" className="mt-1.5" />
         </label>
-        <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</Button>
+        <Button type="submit" disabled={busy} className="mt-1">{busy ? 'Creating…' : 'Create account'}</Button>
       </form>
-      <p className="mt-4 text-sm"><Link to="/login" className="text-[var(--ld-accent)] underline">Already have an account? Log in</Link></p>
-    </main>
+      <p className="mt-5 text-center text-sm text-[var(--ld-muted)]">
+        Already have an account?{' '}
+        <Link to="/login" className="font-medium text-[var(--ld-accent)] hover:underline">Log in</Link>
+      </p>
+    </AuthCard>
   )
 }

@@ -1,8 +1,10 @@
 import { StrictMode, useEffect, useState, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import './index.css'
 import { api, type Me } from './api'
 import { ToastProvider } from './ui'
+import { ThemeProvider } from './theme'
 import { SetupPage } from './pages/Setup'
 import { LoginPage } from './pages/Login'
 import { AppShell } from './pages/Shell'
@@ -33,7 +35,8 @@ function FilesPageWithId() {
 
 function App() {
   return (
-    <ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/s/:token" element={<PublicSharePage />} />
@@ -49,7 +52,8 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-    </ToastProvider>
+      </ToastProvider>
+    </ThemeProvider>
   )
 }
 

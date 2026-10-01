@@ -4,6 +4,7 @@ import { FolderOpen, Share2, Settings, Trash2, LogOut, HardDrive } from 'lucide-
 import { api, fmtSize, type Me } from '../api'
 import { AuthCtx } from '../main'
 import { useUploads } from '../uploader'
+import { Avatar, Logo, Meter } from '../ui'
 
 const nav = [
   { to: '/', label: 'Files', icon: FolderOpen, end: true },
@@ -29,8 +30,11 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* sidebar (desktop) */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-[var(--ld-line)] bg-[var(--ld-surface)] p-4 md:flex">
-        <div className="mb-6 px-2 text-lg font-bold">LocalDrop</div>
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[var(--ld-line)] bg-[var(--ld-surface)] px-4 py-5 md:flex">
+        <div className="mb-7 flex items-center gap-2.5 px-1">
+          <Logo size={30} />
+          <span className="text-[17px] font-bold tracking-tight">LocalDrop</span>
+        </div>
         <nav aria-label="Main" className="flex flex-col gap-1">
           {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
@@ -38,26 +42,54 @@ export function AppShell() {
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-[var(--ld-accent-soft)] font-medium text-[var(--ld-accent)]' : 'hover:bg-[var(--ld-accent-soft)]'}`
+                `app-press flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-colors ${
+                  isActive
+                    ? 'bg-[var(--ld-accent-soft)] font-semibold text-[var(--ld-accent)]'
+                    : 'text-[var(--ld-muted)] hover:bg-[var(--ld-accent-soft)]/50 hover:text-[var(--ld-text)]'
+                }`
               }
             >
-              <Icon size={18} aria-hidden /> {label}
+              {({ isActive }) => (
+                <>
+                  <Icon size={18} aria-hidden strokeWidth={isActive ? 2.2 : 1.8} />
+                  {label}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto flex flex-col gap-2 text-xs text-[var(--ld-muted)]">
-          {me && (
-            <div className="flex items-center gap-2 px-2" aria-label={`Storage used ${fmtSize(me.storage_used)}`}>
-              <HardDrive size={14} aria-hidden />
-              <span>{fmtSize(me.storage_used)} used</span>
+
+        {/* storage meter */}
+        {me && (
+          <div className="mt-6 rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-canvas)] p-3">
+            <div className="flex items-center justify-between text-xs text-[var(--ld-muted)]">
+              <span className="flex items-center gap-1.5"><HardDrive size={13} aria-hidden /> Storage</span>
+              <span className="font-medium text-[var(--ld-text)]">{fmtSize(me.storage_used)}</span>
             </div>
-          )}
-          <div className="flex items-center justify-between px-2">
-            <span>{me?.username}</span>
-            <button onClick={logout} className="flex items-center gap-1 hover:text-[var(--ld-danger)]" aria-label="Log out">
-              <LogOut size={14} aria-hidden /> Log out
-            </button>
+            <Meter ratio={me.storage_quota ? me.storage_used / me.storage_quota : 0.1} className="mt-2" />
+            {me.storage_quota ? (
+              <p className="mt-1.5 text-[11px] text-[var(--ld-muted)]">of {fmtSize(me.storage_quota)} used</p>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-[var(--ld-muted)]">No quota set</p>
+            )}
           </div>
+        )}
+
+        {/* account */}
+        <div className="mt-auto flex items-center gap-2.5 border-t border-[var(--ld-line)] pt-4">
+          <Avatar name={me?.username || '?'} />
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-sm font-semibold">{me?.username || '…'}</p>
+            <p className="text-[11px] text-[var(--ld-muted)]">Owner</p>
+          </div>
+          <button
+            onClick={logout}
+            aria-label="Log out"
+            title="Log out"
+            className="app-press rounded-lg p-2 text-[var(--ld-muted)] hover:bg-[var(--ld-danger-soft)] hover:text-[var(--ld-danger)]"
+          >
+            <LogOut size={16} aria-hidden />
+          </button>
         </div>
       </aside>
 
@@ -65,24 +97,33 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col pb-16 md:pb-0">
         <Outlet />
         {activeUploads > 0 && (
-          <div className="fixed bottom-16 left-1/2 z-40 -translate-x-1/2 rounded-full bg-[var(--ld-accent)] px-4 py-1.5 text-xs font-medium text-white shadow-lg md:bottom-4" role="status">
+          <div className="fixed bottom-16 left-1/2 z-40 -translate-x-1/2 rounded-full bg-[var(--ld-accent)] px-4 py-1.5 text-xs font-medium text-[var(--ld-accent-ink)] shadow-[var(--ld-shadow-md)] md:bottom-4" role="status">
             Uploading {activeUploads} file{activeUploads > 1 ? 's' : ''}…
           </div>
         )}
       </div>
 
       {/* bottom tabs (mobile) */}
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--ld-line)] bg-[var(--ld-surface)] md:hidden">
+      <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--ld-line)] bg-[var(--ld-surface)]/95 backdrop-blur md:hidden">
         {nav.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${isActive ? 'text-[var(--ld-accent)]' : 'text-[var(--ld-muted)]'}`
+              `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
+                isActive ? 'text-[var(--ld-accent)]' : 'text-[var(--ld-muted)]'
+              }`
             }
           >
-            <Icon size={20} aria-hidden /> {label}
+            {({ isActive }) => (
+              <>
+                <span className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? 'bg-[var(--ld-accent-soft)]' : ''}`}>
+                  <Icon size={20} aria-hidden />
+                </span>
+                {label}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>

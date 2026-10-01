@@ -54,6 +54,25 @@ First usable release: a single-owner, self-hosted file drop box.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Production builds shipped without any CSS.** `index.css` was never
+  imported by the app entry, so the built SPA rendered unstyled; the stylesheet
+  now emits and loads correctly (`assets/index-*.css`).
+
+### Added
+
+- **Theme system wired end to end:** system/light/dark picker in Settings,
+  `ThemeProvider` mounted app-wide, persisted in localStorage, applied as
+  `data-theme` on `<html>`.
+- **Visual polish pass:** branded auth screens (Login/Setup), app shell with
+  storage meter + avatar + active nav, grid view for the file browser
+  (persisted per user), refined tokens/typography/focus states, skeleton
+  loaders and composed empty states across screens, upload panel with live
+  transfer speed, branded public share page.
+- Tests: 26-test critical-path suite (adds blob self-healing, dedup race,
+  cleanup-vs-live-uploads, metrics auth, missing-blob 404, multi-range).
+
 ### Added
 
 - Master Specification (Phase 0): product vision, requirements, architecture,

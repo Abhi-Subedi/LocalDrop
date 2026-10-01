@@ -23,7 +23,7 @@ Run the suite (needs Postgres on `:5433` with `localdrop_test` database):
 python -m pytest tests/ -q
 ```
 
-The critical-path suite (`tests/test_v1_critical.py`, 20 tests) covers auth,
+The critical-path suite (`tests/test_v1_critical.py`, 26 tests) covers auth,
 authz isolation, file lifecycle, tus resume/checksum/oversize, dedup,
 sharing lifecycle/expiry/limits, hostile names, SVG-as-attachment,
 multi-range degradation, and binary byte-identity.

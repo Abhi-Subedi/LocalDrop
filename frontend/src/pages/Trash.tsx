@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, fmtDate, fmtSize, type Entry } from '../api'
-import { Button, entryIcon, useToast } from '../ui'
+import { Button, EmptyState, PageHeader, SkeletonList, entryIcon, useToast } from '../ui'
+import { Trash2 } from 'lucide-react'
 
 export function TrashPage() {
   const [items, setItems] = useState<Entry[]>([])
@@ -30,14 +31,20 @@ export function TrashPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Trash</h1>
-        {items.length > 0 && <Button variant="danger" onClick={purge}>Empty trash</Button>}
-      </div>
-      {loading ? <p className="text-sm text-[var(--ld-muted)]" role="status">Loading…</p>
-        : items.length === 0 ? <p className="py-16 text-center text-sm text-[var(--ld-muted)]">Trash is empty.</p>
-        : (
-          <ul className="divide-y divide-[var(--ld-line)] rounded-xl border border-[var(--ld-line)] bg-[var(--ld-surface)]">
+      <PageHeader
+        title="Trash"
+        hint="Deleted items are purged automatically after 30 days."
+        actions={items.length > 0 ? <Button variant="danger" onClick={purge}>Empty trash</Button> : undefined}
+      />
+      {loading ? <SkeletonList rows={4} />
+        : items.length === 0 ? (
+          <EmptyState
+            icon={<Trash2 size={26} aria-hidden />}
+            title="Trash is empty"
+            hint="Deleted files and folders land here first — nothing to clean up right now."
+          />
+        ) : (
+          <ul className="divide-y divide-[var(--ld-line)] rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-[var(--ld-shadow-sm)]">
             {items.map((e) => (
               <li key={e.id} className="flex items-center gap-3 px-4 py-3">
                 {entryIcon(e, 18)}
