@@ -24,6 +24,7 @@ declare module 'lucide-react' {
   export const AlertTriangle: FC<LucideProps>
   export const Inbox: FC<LucideProps>
   export const ArrowUp: FC<LucideProps>
+  export const ChevronDown: FC<LucideProps>
   export const ChevronRight: FC<LucideProps>
   export const Search: FC<LucideProps>
   export const Upload: FC<LucideProps>

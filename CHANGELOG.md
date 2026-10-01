@@ -62,6 +62,10 @@ First usable release: a single-owner, self-hosted file drop box.
 
 ### Added
 
+- **Drive-style app layout:** top bar with global search + theme toggle +
+  account menu, sidebar with "New" (upload/new folder) menu and pill
+  navigation, file browser as a table with Name/Size/Modified columns
+  (compact two-line rows on mobile), big page titles with breadcrumbs.
 - **Theme system wired end to end:** system/light/dark picker in Settings,
   `ThemeProvider` mounted app-wide, persisted in localStorage, applied as
   `data-theme` on `<html>`.

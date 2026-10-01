@@ -14,6 +14,7 @@ import {
   Button, EmptyState, Input, Modal, Segmented, SkeletonGrid, SkeletonList,
   entryIcon, useToast,
 } from '../ui'
+import { useUi } from '../ui-store'
 import { startUpload, useUploads, pauseUpload, resumeUpload, retryUpload, cancelUpload } from '../uploader'
 
 type DialogState =
@@ -35,7 +36,8 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
   const [crumbs, setCrumbs] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [q, setQ] = useState('')
+  const q = useUi((s) => s.q)
+  const setQ = useUi((s) => s.setQ)
   const [sort, setSort] = useState('name')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dialog, setDialog] = useState<DialogState | null>(null) //
@@ -73,6 +75,22 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
   }, [folderId, q, sort])
 
   useEffect(() => { load() }, [load])
+
+  // Report the current folder to the shell ("New" menu targets it) and
+  // answer the shell's upload/new-folder requests.
+  useEffect(() => {
+    useUi.getState().setFolderId(folderId)
+    const onUpload = () => pickFiles()
+    const onNewFolder = () => setDialog({ kind: 'newFolder' })
+    window.addEventListener('ld-upload', onUpload)
+    window.addEventListener('ld-new-folder', onNewFolder)
+    return () => {
+      useUi.getState().setFolderId(null)
+      window.removeEventListener('ld-upload', onUpload)
+      window.removeEventListener('ld-new-folder', onNewFolder)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderId])
 
   const refresh = () => { load(); api.get('/me').catch(() => {}) }
 
@@ -142,58 +160,64 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      {/* header */}
-      <header className="sticky top-0 z-10 border-b border-[var(--ld-line)] bg-[var(--ld-surface)]/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
-          {/* breadcrumbs */}
-          <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1 text-sm">
-            <Link to="/" className="rounded px-1 py-0.5 hover:bg-[var(--ld-accent-soft)]" aria-label="Root folder">Home</Link>
+      {/* title + toolbar (Drive-style: big title, filter chips below) */}
+      <div className="mx-auto w-full max-w-6xl px-4 pt-5 md:px-8">
+        {folderId && (
+          <nav aria-label="Breadcrumb" className="mb-1 flex min-w-0 items-center gap-1 text-sm text-[var(--ld-muted)]">
+            <Link to="/" className="rounded px-1 py-0.5 hover:bg-[var(--ld-accent-soft)] hover:text-[var(--ld-text)]" aria-label="Root folder">My Files</Link>
             {crumbs.map((c, i) => (
-              <span key={c.id} className="flex items-center gap-1">
-                <ChevronRight size={14} className="text-[var(--ld-muted)]" aria-hidden />
+              <span key={c.id} className="flex min-w-0 items-center gap-1">
+                <ChevronRight size={14} className="shrink-0" aria-hidden />
                 {i === crumbs.length - 1
-                  ? <span aria-current="location" className="truncate font-medium">{c.name}</span>
-                  : <Link to={`/files/${c.id}`} className="truncate rounded px-1 py-0.5 hover:bg-[var(--ld-accent-soft)]">{c.name}</Link>}
+                  ? <span aria-current="location" className="truncate font-medium text-[var(--ld-text)]">{c.name}</span>
+                  : <Link to={`/files/${c.id}`} className="truncate rounded px-1 py-0.5 hover:bg-[var(--ld-accent-soft)] hover:text-[var(--ld-text)]">{c.name}</Link>}
               </span>
             ))}
           </nav>
-          <div className="flex items-center gap-2">
-            <label className="relative">
-              <span className="sr-only">Search files</span>
-              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ld-muted)]" aria-hidden />
-              <Input
-                value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…"
-                className="!w-44 !py-1.5 pl-8 md:!w-56" aria-label="Search files"
-              />
-            </label>
-            <select
-              value={sort} onChange={(e) => setSort(e.target.value)}
-              aria-label="Sort files" className="rounded-lg border border-[var(--ld-line)] bg-[var(--ld-surface)] px-2 py-1.5 text-sm"
-            >
-              {SORTS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
-            </select>
-            <Segmented
-              ariaLabel="View mode"
-              value={view}
-              onChange={setView}
-              options={[
-                { v: 'list', label: 'List view', icon: <List size={15} aria-hidden /> },
-                { v: 'grid', label: 'Grid view', icon: <LayoutGrid size={15} aria-hidden /> },
-              ]}
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="truncate text-2xl font-bold tracking-tight">
+            {folderId ? (crumbs[crumbs.length - 1]?.name ?? 'Folder') : 'My Files'}
+          </h1>
+          <Segmented
+            ariaLabel="View mode"
+            value={view}
+            onChange={setView}
+            options={[
+              { v: 'list', label: 'List view', icon: <List size={15} aria-hidden /> },
+              { v: 'grid', label: 'Grid view', icon: <LayoutGrid size={15} aria-hidden /> },
+            ]}
+          />
+        </div>
+        <div className="mb-5 mt-4 flex flex-wrap items-center gap-2">
+          <label className="relative md:hidden">
+            <span className="sr-only">Search files</span>
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ld-muted)]" aria-hidden />
+            <Input
+              value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…"
+              className="!w-44 !py-1.5 pl-8" aria-label="Search files"
             />
+          </label>
+          <select
+            value={sort} onChange={(e) => setSort(e.target.value)}
+            aria-label="Sort files" className="h-9 rounded-full border border-[var(--ld-line)] bg-[var(--ld-surface)] px-3.5 text-sm shadow-[var(--ld-shadow-sm)]"
+          >
+            {SORTS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+          </select>
+          <div className="ml-auto flex items-center gap-2">
             {folderId && (
               <>
-                <Button variant="secondary" onClick={() => setDialog({ kind: 'newFolder' })} ariaLabel="Create folder">
+                <Button variant="secondary" onClick={() => setDialog({ kind: 'newFolder' })} ariaLabel="Create folder" className="!rounded-full">
                   <FolderPlus size={16} aria-hidden /><span className="hidden sm:inline">Folder</span>
                 </Button>
-                <Button onClick={pickFiles} ariaLabel="Upload files">
+                <Button onClick={pickFiles} ariaLabel="Upload files" className="!rounded-full">
                   <Upload size={16} aria-hidden /><span className="hidden sm:inline">Upload</span>
                 </Button>
               </>
             )}
           </div>
         </div>
-      </header>
+      </div>
 
       <input ref={fileInput} type="file" multiple hidden onChange={onUploadChosen} aria-hidden />
 
@@ -227,16 +251,7 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
       )}
 
       {/* body */}
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4">
-        {!folderId && (
-          <div className="mb-4 rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] px-4 py-3.5 shadow-[var(--ld-shadow-sm)]">
-            <h1 className="text-base font-semibold">Your folders</h1>
-            <p className="text-sm text-[var(--ld-muted)]">
-              Open a folder to upload and manage files — or just drop files onto it.
-            </p>
-          </div>
-        )}
-
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-10 md:px-8">
         {dragOver && (
           <div className="pointer-events-none fixed inset-0 z-20 m-4 grid place-items-center rounded-2xl border-2 border-dashed border-[var(--ld-accent)] bg-[var(--ld-accent-soft)]/80" role="status">
             <p className="text-lg font-medium text-[var(--ld-accent)]">Drop files to upload</p>
@@ -323,42 +338,66 @@ export function FilesPage({ folderId }: { folderId: string | null }) {
             ))}
           </ul>
         ) : (
-          <ul role="listbox" aria-label="Files and folders" aria-multiselectable="true" className="divide-y divide-[var(--ld-line)] overflow-hidden rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-[var(--ld-shadow-sm)]">
-            {entries.map((entry, idx) => (
-              <li
-                key={entry.id}
-                role="option"
-                aria-selected={selected.has(entry.id)}
-                tabIndex={0}
-                onClick={(e) => onRowClick(e, entry, idx)}
-                onContextMenu={(e) => { e.preventDefault(); setMenuFor(entry.id) }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { entry.kind === 'folder' ? nav(`/files/${entry.id}`) : setPreview(entry) }
-                  if (e.key === ' ') { e.preventDefault(); onRowClick({ ctrlKey: true } as React.MouseEvent, entry, idx) }
-                  if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) setMenuFor(entry.id)
-                }}
-                className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors ${selected.has(entry.id) ? 'bg-[var(--ld-accent-soft)]' : 'hover:bg-[var(--ld-accent-soft)]/50'}`}
-              >
-                {isImage(entry) && entry.hash_status === 'verified'
-                  ? <img src={`/api/v1/files/${entry.id}/thumbnail`} alt="" loading="lazy" className="h-10 w-10 rounded-lg object-cover" />
-                  : <span className="grid h-10 w-10 place-items-center">{entryIcon(entry, 22)}</span>}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium" title={entry.name}>{entry.name}</span>
-                  <span className="block text-xs text-[var(--ld-muted)]">
-                    {entry.kind === 'file' ? fmtSize(entry.size) : 'Folder'}
-                    {' · '}{fmtDate(entry.created_at)}
-                    {entry.hash_status === 'pending' && ' · verifying…'}
+          <div className="overflow-hidden rounded-[var(--ld-radius)] border border-[var(--ld-line)] bg-[var(--ld-surface)] shadow-[var(--ld-shadow-sm)]">
+            {/* column headers (desktop, Drive-style table) */}
+            <div
+              aria-hidden
+              className="hidden md:grid md:grid-cols-[minmax(0,1fr)_110px_170px_48px] md:items-center md:gap-3 md:border-b md:border-[var(--ld-line)] md:px-4 md:py-2.5 md:text-xs md:font-semibold md:text-[var(--ld-muted)]"
+            >
+              <span>Name</span>
+              <span className="text-right md:text-left">Size</span>
+              <span>Modified</span>
+              <span />
+            </div>
+            <ul role="listbox" aria-label="Files and folders" aria-multiselectable="true" className="divide-y divide-[var(--ld-line)]">
+              {entries.map((entry, idx) => (
+                <li
+                  key={entry.id}
+                  role="option"
+                  aria-selected={selected.has(entry.id)}
+                  tabIndex={0}
+                  onClick={(e) => onRowClick(e, entry, idx)}
+                  onContextMenu={(e) => { e.preventDefault(); setMenuFor(entry.id) }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { entry.kind === 'folder' ? nav(`/files/${entry.id}`) : setPreview(entry) }
+                    if (e.key === ' ') { e.preventDefault(); onRowClick({ ctrlKey: true } as React.MouseEvent, entry, idx) }
+                    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) setMenuFor(entry.id)
+                  }}
+                  className={`flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors md:grid md:grid-cols-[minmax(0,1fr)_110px_170px_48px] md:items-center ${
+                    selected.has(entry.id) ? 'bg-[var(--ld-accent-soft)]' : 'hover:bg-[var(--ld-surface-2)]'
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    {isImage(entry) && entry.hash_status === 'verified'
+                      ? <img src={`/api/v1/files/${entry.id}/thumbnail`} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                      : <span className="grid h-10 w-10 shrink-0 place-items-center">{entryIcon(entry, 22)}</span>}
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium" title={entry.name}>{entry.name}</span>
+                      <span className="block text-xs text-[var(--ld-muted)] md:hidden">
+                        {entry.kind === 'file' ? fmtSize(entry.size) : 'Folder'}
+                        {' · '}{fmtDate(entry.created_at)}
+                        {entry.hash_status === 'pending' && ' · verifying…'}
+                      </span>
+                      <span className="hidden text-xs text-[var(--ld-muted)] md:block">
+                        {entry.kind === 'folder' ? 'Folder' : (entry.mime_type || '').split('/')[1] || 'File'}
+                        {entry.hash_status === 'pending' && ' · verifying…'}
+                      </span>
+                    </span>
                   </span>
-                </span>
-                <div className="relative" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" onClick={() => setMenuFor(menuFor === entry.id ? null : entry.id)} ariaLabel={`Actions for ${entry.name}`} aria-expanded={menuFor === entry.id}>
-                    <MoreVertical size={16} aria-hidden />
-                  </Button>
-                  {menuFor === entry.id && <EntryMenu entry={entry} close={() => setMenuFor(null)} setDialog={setDialog} setPreview={setPreview} />}
-                </div>
-              </li>
-            ))}
-          </ul>
+                  <span className="hidden text-sm tabular-nums text-[var(--ld-muted)] md:block">
+                    {entry.kind === 'file' ? fmtSize(entry.size) : '—'}
+                  </span>
+                  <span className="hidden text-sm text-[var(--ld-muted)] md:block">{fmtDate(entry.created_at)}</span>
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" onClick={() => setMenuFor(menuFor === entry.id ? null : entry.id)} ariaLabel={`Actions for ${entry.name}`} aria-expanded={menuFor === entry.id}>
+                      <MoreVertical size={16} aria-hidden />
+                    </Button>
+                    {menuFor === entry.id && <EntryMenu entry={entry} close={() => setMenuFor(null)} setDialog={setDialog} setPreview={setPreview} />}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </main>
 

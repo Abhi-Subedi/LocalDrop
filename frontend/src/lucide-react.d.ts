@@ -8,6 +8,7 @@ declare module 'lucide-react' {
   export const ArrowUp: Icon
   export const Ban: Icon
   export const CheckCircle2: Icon
+  export const ChevronDown: Icon
   export const ChevronRight: Icon
   export const Copy: Icon
   export const Download: Icon
