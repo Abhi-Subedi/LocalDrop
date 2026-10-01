@@ -122,6 +122,19 @@ def check_slugs_are_producible() -> list[str]:
     return problems
 
 
+def check_windows_installer_script() -> list[str]:
+    path = ROOT / "packaging" / "windows" / "localdrop.iss"
+    if not path.exists():
+        return ["packaging/windows/localdrop.iss does not exist"]
+    text = path.read_text(encoding="utf-8")
+    if re.search(r"^(?!\s*;)\s*RelativePathCheck\s*=", text, re.M):
+        return [
+            "packaging/windows/localdrop.iss: RelativePathCheck is not an Inno Setup "
+            "directive and breaks `iscc` on windows-x64"
+        ]
+    return []
+
+
 def main() -> int:
     problems: list[str] = []
 
@@ -138,6 +151,7 @@ def main() -> int:
     problems += check_shell_installer()
     problems += check_powershell_installer()
     problems += check_slugs_are_producible()
+    problems += check_windows_installer_script()
 
     # Nothing anywhere may name an artefact the build script cannot produce.
     for path in [
