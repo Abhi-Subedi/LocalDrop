@@ -323,7 +323,12 @@ jobs:
           fi
           echo "$ids" | sed 's/^/  will fetch: /'
 
-          for id in $ids; do
+          # Iterate over ids only. `for id in $ids` would also visit the name
+          # token from each line and request artifacts/binary-linux-arm64/zip,
+          # which is not an id - an error that is tedious to read and fails
+          # every single run in the same place.
+          for id in $(echo "$ids" | awk '{print $1}'); do
+            name=$(echo "$ids" | awk -v want="$id" '$1 == want {print $2}')
             zip="work/artifact-$id.zip"
             ok=0
             for attempt in 1 2 3 4 5; do
@@ -331,13 +336,15 @@ jobs:
                     "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$zip"; then
                 ok=1; break
               fi
-              echo "  attempt $attempt for artifact $id failed; retrying"
+              echo "  attempt $attempt for $name (id $id) failed; retrying"
               sleep $((attempt * 5))
             done
-            [ "$ok" -eq 1 ] || { echo "::error::artifact $id failed 5 times"; exit 1; }
+            [ "$ok" -eq 1 ] || { echo "::error::$name (id $id) failed 5 times"; exit 1; }
             unzip -oq "$zip" -d "work/unpacked-$id"
             rm -f "$zip"
-            echo "  artifact $id -> $(find "work/unpacked-$id" -type f | wc -l) file(s)"
+            got=$(find "work/unpacked-$id" -type f | wc -l)
+            echo "  $name -> $got file(s)"
+            [ "$got" -gt 0 ] || { echo "::error::$name unpacked to nothing"; exit 1; }
           done
 
           find work -type f -exec cp {} dist/release/ \;
