@@ -52,7 +52,7 @@ def share_token() -> str:
     raw = secrets.token_bytes(17)  # 136 bits → 27.2 base32 chars; trim to 26
     alphabet = string.ascii_uppercase + "234567"
     value = int.from_bytes(raw, "big")
-    out = []
+    out: list[str] = []
     while value and len(out) < 26:
         value, rem = divmod(value, 32)
         out.append(alphabet[rem])

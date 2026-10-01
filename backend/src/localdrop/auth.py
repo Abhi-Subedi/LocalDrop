@@ -43,9 +43,9 @@ async def _load_session_user(db: AsyncSession, token: str) -> tuple[AuthSession,
     th = hash_token(token)
     row = (
         await db.execute(
-            select(AuthSession).join(User, AuthSession.user_id == User.id).where(
-                AuthSession.token_hash == th
-            )
+            select(AuthSession)
+            .join(User, AuthSession.user_id == User.id)
+            .where(AuthSession.token_hash == th)
         )
     ).scalar_one_or_none()
     if row is None:
@@ -62,9 +62,9 @@ async def _load_pat_user(db: AsyncSession, token: str) -> tuple[PersonalAccessTo
     th = hash_token(token)
     pat = (
         await db.execute(
-            select(PersonalAccessToken).join(User, PersonalAccessToken.user_id == User.id).where(
-                PersonalAccessToken.token_hash == th
-            )
+            select(PersonalAccessToken)
+            .join(User, PersonalAccessToken.user_id == User.id)
+            .where(PersonalAccessToken.token_hash == th)
         )
     ).scalar_one_or_none()
     if pat is None:
@@ -77,9 +77,7 @@ async def _load_pat_user(db: AsyncSession, token: str) -> tuple[PersonalAccessTo
     return pat, pat.user
 
 
-async def resolve_principal(
-    request: Request, db: AsyncSession = Depends(get_db)
-) -> Principal:
+async def resolve_principal(request: Request, db: AsyncSession = Depends(get_db)) -> Principal:
     token = request.cookies.get(SESSION_COOKIE)
     if token:
         loaded = await _load_session_user(db, token)
@@ -97,9 +95,9 @@ async def resolve_principal(
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         raw = auth[7:].strip()
-        loaded = await _load_pat_user(db, raw)
-        if loaded is not None:
-            pat, user = loaded
+        pat_loaded = await _load_pat_user(db, raw)
+        if pat_loaded is not None:
+            pat, user = pat_loaded
             return Principal(
                 user_id=user.id,
                 username=user.username,

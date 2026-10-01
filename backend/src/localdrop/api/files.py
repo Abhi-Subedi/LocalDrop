@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid as uuid_mod
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,8 +44,12 @@ async def create_folder(
     folder = await tree.create_folder(db, p, parent_id, body.name)
     await db.commit()
     return EntryOut(
-        id=folder.id, kind="folder", name=folder.name, size=0,
-        created_at=folder.created_at, updated_at=folder.updated_at,
+        id=folder.id,
+        kind="folder",
+        name=folder.name,
+        size=0,
+        created_at=folder.created_at,
+        updated_at=folder.updated_at,
     )
 
 
@@ -62,8 +65,12 @@ async def rename_folder(
     folder = await tree.rename_folder(db, p, folder_id, body.name)
     await db.commit()
     return EntryOut(
-        id=folder.id, kind="folder", name=folder.name, size=0,
-        created_at=folder.created_at, updated_at=folder.updated_at,
+        id=folder.id,
+        kind="folder",
+        name=folder.name,
+        size=0,
+        created_at=folder.created_at,
+        updated_at=folder.updated_at,
     )
 
 
@@ -80,8 +87,12 @@ async def move_folder(
     folder = await tree.move_folder(db, p, folder_id, new_parent)
     await db.commit()
     return EntryOut(
-        id=folder.id, kind="folder", name=folder.name, size=0,
-        created_at=folder.created_at, updated_at=folder.updated_at,
+        id=folder.id,
+        kind="folder",
+        name=folder.name,
+        size=0,
+        created_at=folder.created_at,
+        updated_at=folder.updated_at,
     )
 
 
@@ -109,8 +120,12 @@ async def restore_folder(
     folder = await tree.restore_folder(db, p, folder_id)
     await db.commit()
     return EntryOut(
-        id=folder.id, kind="folder", name=folder.name, size=0,
-        created_at=folder.created_at, updated_at=folder.updated_at,
+        id=folder.id,
+        kind="folder",
+        name=folder.name,
+        size=0,
+        created_at=folder.created_at,
+        updated_at=folder.updated_at,
     )
 
 
@@ -186,8 +201,13 @@ async def rename_file(
     f = await tree.rename_file(db, p, file_id, body.name)
     await db.commit()
     return EntryOut(
-        id=f.id, kind="file", name=f.name, size=f.size, mime_type=f.mime_type,
-        created_at=f.created_at, updated_at=f.updated_at,
+        id=f.id,
+        kind="file",
+        name=f.name,
+        size=f.size,
+        mime_type=f.mime_type,
+        created_at=f.created_at,
+        updated_at=f.updated_at,
     )
 
 
@@ -202,13 +222,16 @@ async def move_file(
     check_csrf(request)
     if body.folder_id is None:
         raise not_found()
-    f = await tree.move_file(
-        db, p, file_id, uuid_mod.UUID(str(body.folder_id)), body.overwrite
-    )
+    f = await tree.move_file(db, p, file_id, uuid_mod.UUID(str(body.folder_id)), body.overwrite)
     await db.commit()
     return EntryOut(
-        id=f.id, kind="file", name=f.name, size=f.size, mime_type=f.mime_type,
-        created_at=f.created_at, updated_at=f.updated_at,
+        id=f.id,
+        kind="file",
+        name=f.name,
+        size=f.size,
+        mime_type=f.mime_type,
+        created_at=f.created_at,
+        updated_at=f.updated_at,
     )
 
 
@@ -224,8 +247,13 @@ async def copy_file(
     f = await tree.copy_file(db, p, file_id, uuid_mod.UUID(str(body.folder_id)))
     await db.commit()
     return EntryOut(
-        id=f.id, kind="file", name=f.name, size=f.size, mime_type=f.mime_type,
-        created_at=f.created_at, updated_at=f.updated_at,
+        id=f.id,
+        kind="file",
+        name=f.name,
+        size=f.size,
+        mime_type=f.mime_type,
+        created_at=f.created_at,
+        updated_at=f.updated_at,
     )
 
 
@@ -253,8 +281,13 @@ async def restore_file(
     f = await tree.restore_file(db, p, file_id)
     await db.commit()
     return EntryOut(
-        id=f.id, kind="file", name=f.name, size=f.size, mime_type=f.mime_type,
-        created_at=f.created_at, updated_at=f.updated_at,
+        id=f.id,
+        kind="file",
+        name=f.name,
+        size=f.size,
+        mime_type=f.mime_type,
+        created_at=f.created_at,
+        updated_at=f.updated_at,
     )
 
 
@@ -307,8 +340,9 @@ async def thumbnail_ep(
     p: Principal = Depends(require_read),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    from fastapi.responses import FileResponse as StarletteFileResponse
     from pathlib import Path
+
+    from fastapi.responses import FileResponse as StarletteFileResponse
 
     f = await tree.get_owned_file_with_blob(db, p, file_id)
     storage = get_storage()
@@ -344,7 +378,7 @@ async def preview_ep(
     try:
         fd = storage.open_read(f.blob.storage_path)
     except (OSError, Problem):
-        raise not_found("File data is not available on the server.")
+        raise not_found("File data is not available on the server.") from None
     try:
         raw = os.read(fd, 256 * 1024)
     finally:

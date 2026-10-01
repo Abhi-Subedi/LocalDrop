@@ -121,9 +121,9 @@ async def create_upload(
 
     active = (
         await db.execute(
-            select(func.count()).select_from(UploadSession).where(
-                UploadSession.user_id == p.user_id, UploadSession.status == "active"
-            )
+            select(func.count())
+            .select_from(UploadSession)
+            .where(UploadSession.user_id == p.user_id, UploadSession.status == "active")
         )
     ).scalar_one()
     if active >= s.upload_sessions_max:
@@ -149,7 +149,9 @@ async def create_upload(
     return sess, mime_type
 
 
-async def get_active_session(db: AsyncSession, p: Principal, session_id: uuid_mod.UUID) -> UploadSession:
+async def get_active_session(
+    db: AsyncSession, p: Principal, session_id: uuid_mod.UUID
+) -> UploadSession:
     sess = (
         await db.execute(
             select(UploadSession).where(
@@ -244,7 +246,9 @@ async def append_chunk(
                 hasher.update(chunk)
             os_write(fd, chunk)
         if written != length:
-            raise Problem(460, "chunk-size", f"Body shorter than Content-Length ({written}/{length})")
+            raise Problem(
+                460, "chunk-size", f"Body shorter than Content-Length ({written}/{length})"
+            )
     finally:
         import os as _os
 
@@ -255,7 +259,10 @@ async def append_chunk(
             # truncate the appended bytes back (offset not advanced)
             await _truncate_to(db, sess, sess.offset)
             raise Problem(
-                460, "checksum-mismatch", "Checksum Mismatch", "Chunk checksum failed; retry the chunk."
+                460,
+                "checksum-mismatch",
+                "Checksum Mismatch",
+                "Chunk checksum failed; retry the chunk.",
             )
 
     sess.offset += length
@@ -304,12 +311,16 @@ async def cancel_upload(db: AsyncSession, p: Principal, session_id: uuid_mod.UUI
 
 async def list_sessions(db: AsyncSession, p: Principal) -> list[UploadSession]:
     rows = (
-        await db.execute(
-            select(UploadSession)
-            .where(UploadSession.user_id == p.user_id, UploadSession.status == "active")
-            .order_by(UploadSession.created_at.desc())
+        (
+            await db.execute(
+                select(UploadSession)
+                .where(UploadSession.user_id == p.user_id, UploadSession.status == "active")
+                .order_by(UploadSession.created_at.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -336,7 +347,12 @@ async def finalize(db: AsyncSession, p: Principal, session_id: uuid_mod.UUID) ->
     st.fsync_file(Path(sess.staging_path))
     st.fsync_dir(st.staging)
 
-    blob = Blob(size=sess.total_size, status="pending", storage_path=sess.staging_path, mime_hint=sess.mime_type)
+    blob = Blob(
+        size=sess.total_size,
+        status="pending",
+        storage_path=sess.staging_path,
+        mime_hint=sess.mime_type,
+    )
     db.add(blob)
     await db.flush()
     f = File(
@@ -350,7 +366,14 @@ async def finalize(db: AsyncSession, p: Principal, session_id: uuid_mod.UUID) ->
     db.add(f)
     sess.status = "finalized"
     await db.flush()
-    await audit(db, "upload.finalize", actor_id=str(p.user_id), target_type="file", target_id=str(f.id), details={"size": sess.total_size})
+    await audit(
+        db,
+        "upload.finalize",
+        actor_id=str(p.user_id),
+        target_type="file",
+        target_id=str(f.id),
+        details={"size": sess.total_size},
+    )
     return f
 
 
@@ -362,10 +385,14 @@ async def hash_pending_blobs(db: AsyncSession, storage: Storage, max_n: int = 10
     dedup-link; set status verified. Idempotent (staging is source of truth
     until rename ack)."""
     rows = (
-        await db.execute(
-            select(Blob).where(Blob.status == "pending").order_by(Blob.created_at).limit(max_n)
+        (
+            await db.execute(
+                select(Blob).where(Blob.status == "pending").order_by(Blob.created_at).limit(max_n)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     done = 0
     for blob in rows:
         src = Path(blob.storage_path)
@@ -373,14 +400,10 @@ async def hash_pending_blobs(db: AsyncSession, storage: Storage, max_n: int = 10
             actual_size = storage.size_of(src)
         except (Problem, OSError):
             # staging file missing (e.g. crashed before fsync): mark dead
-            await db.execute(
-                update(Blob).where(Blob.id == blob.id).values(status="missing")
-            )
+            await db.execute(update(Blob).where(Blob.id == blob.id).values(status="missing"))
             continue
         if actual_size != blob.size:
-            await db.execute(
-                update(Blob).where(Blob.id == blob.id).values(status="missing")
-            )
+            await db.execute(update(Blob).where(Blob.id == blob.id).values(status="missing"))
             continue
         h = hashlib.sha256()
         fd = storage.open_read(src)
@@ -402,9 +425,7 @@ async def hash_pending_blobs(db: AsyncSession, storage: Storage, max_n: int = 10
 
         # dedup: does a verified blob with this hash already exist?
         existing = (
-            await db.execute(
-                select(Blob).where(Blob.sha256 == digest, Blob.status == "verified")
-            )
+            await db.execute(select(Blob).where(Blob.sha256 == digest, Blob.status == "verified"))
         ).scalar_one_or_none()
         if existing is not None:
             # Self-healing: the canonical bytes may be gone (out-of-band
@@ -459,10 +480,14 @@ async def hash_pending_blobs(db: AsyncSession, storage: Storage, max_n: int = 10
                 # file holds identical bytes, so just link our files to the
                 # winner and drop the pending row.
                 winners = (
-                    await db.execute(
-                        select(Blob).where(Blob.sha256 == digest, Blob.status == "verified")
+                    (
+                        await db.execute(
+                            select(Blob).where(Blob.sha256 == digest, Blob.status == "verified")
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 winner = next((w for w in winners if w.id != blob.id), None)
                 if winner is None:
                     continue  # vanished mid-race; next tick retries
@@ -480,12 +505,16 @@ async def expire_sessions(db: AsyncSession, storage: Storage) -> int:
     """GC expired/cancelled upload sessions + orphan staging files."""
     now = datetime.now(UTC)
     rows = (
-        await db.execute(
-            select(UploadSession).where(
-                UploadSession.status == "active", UploadSession.expires_at < now
+        (
+            await db.execute(
+                select(UploadSession).where(
+                    UploadSession.status == "active", UploadSession.expires_at < now
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     n = 0
     for sess in rows:
         sess.status = "expired"
@@ -499,8 +528,14 @@ async def expire_sessions(db: AsyncSession, storage: Storage) -> int:
     # rows pointing outside this data dir are someone else's problem (skip).
     known: set[str] = set()
     for k in (
-        await db.execute(select(UploadSession.staging_path).where(UploadSession.status == "active"))
-    ).scalars().all():
+        (
+            await db.execute(
+                select(UploadSession.staging_path).where(UploadSession.status == "active")
+            )
+        )
+        .scalars()
+        .all()
+    ):
         try:
             known.add(str(storage.from_recorded(k)))
         except Problem:

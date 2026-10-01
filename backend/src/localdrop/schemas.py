@@ -20,11 +20,22 @@ _FORBIDDEN_CHARS = set("/\\\x00")
 _CONTROL = {c for c in range(0x20)} | {0x7F}
 # bidi overrides + zero-width + tag chars (spoofed names, RTL attacks)
 _BIDI_ZW = {
-    0x200B, 0x200C, 0x200D, 0x200E, 0x200F,  # zero-width, LRM/RLM
-    0x202A, 0x202B, 0x202C, 0x202D, 0x202E,  # bidi embedding/override
-    0x2066, 0x2067, 0x2068, 0x2069,          # bidi isolate
-    0xFEFF,                                   # BOM/zero-width no-break space
-    0xE0001,                                  # tag
+    0x200B,
+    0x200C,
+    0x200D,
+    0x200E,
+    0x200F,  # zero-width, LRM/RLM
+    0x202A,
+    0x202B,
+    0x202C,
+    0x202D,
+    0x202E,  # bidi embedding/override
+    0x2066,
+    0x2067,
+    0x2068,
+    0x2069,  # bidi isolate
+    0xFEFF,  # BOM/zero-width no-break space
+    0xE0001,  # tag
 }
 
 
@@ -43,7 +54,9 @@ def _validate_name(v: str) -> str:
     return v
 
 
-NameStr = Annotated[str, Field(min_length=1, max_length=MAX_NAME_BYTES * 4), AfterValidator(_validate_name)]
+NameStr = Annotated[
+    str, Field(min_length=1, max_length=MAX_NAME_BYTES * 4), AfterValidator(_validate_name)
+]
 
 
 class ORMModel(BaseModel):

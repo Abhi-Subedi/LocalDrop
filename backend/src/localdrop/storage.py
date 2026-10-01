@@ -24,7 +24,9 @@ _OPEN_FLAGS_READ = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_B
 _OPEN_FLAGS_WRITE_NEW = (
     os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
 )
-_OPEN_FLAGS_APPEND = os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+_OPEN_FLAGS_APPEND = (
+    os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+)
 _OPEN_FLAGS_RDWR = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
 
 
@@ -97,13 +99,13 @@ class Storage:
         os.close(fd)
         return path
 
-    def open_append(self, path: Path) -> int:
+    def open_append(self, path: Path | str) -> int:
         return os.open(self._resolve(path), _OPEN_FLAGS_APPEND)
 
-    def open_read(self, path: Path) -> int:
+    def open_read(self, path: Path | str) -> int:
         return os.open(self._resolve(path), _OPEN_FLAGS_READ)
 
-    def delete(self, path: Path, missing_ok: bool = True) -> None:
+    def delete(self, path: Path | str, missing_ok: bool = True) -> None:
         p = self._resolve(path)
         try:
             p.unlink()
@@ -136,7 +138,7 @@ class Storage:
         finally:
             os.close(fd)
 
-    def size_of(self, path: Path) -> int:
+    def size_of(self, path: Path | str) -> int:
         return self._resolve(path).stat().st_size
 
     def free_bytes(self) -> int:

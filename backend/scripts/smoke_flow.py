@@ -46,7 +46,9 @@ async def main() -> None:
     async with LifespanManager(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             await onboard(c)
-            r = await c.post(f"{B}/auth/login", json={"username": "owner", "password": "devpassword1"}, headers=H)
+            r = await c.post(
+                f"{B}/auth/login", json={"username": "owner", "password": "devpassword1"}, headers=H
+            )
             assert r.status_code == 204, r.text
             print("login: 204")
 
@@ -55,18 +57,28 @@ async def main() -> None:
             print("create folder:", r.status_code)
             fid = r.json()["id"]
 
-            r = await c.post(f"{B}/folders", json={"parent_id": None, "name": UNIQ.lower()}, headers=H)
+            r = await c.post(
+                f"{B}/folders", json={"parent_id": None, "name": UNIQ.lower()}, headers=H
+            )
             print("collision 409:", r.status_code)
 
             content = b"hello localdrop " * 100000  # 1.6 MB
             md = (
-                "filename " + base64.b64encode(b"photo.bin").decode()
-                + ",folderId " + base64.b64encode(str(fid).encode()).decode()
-                + ",filetype " + base64.b64encode(b"application/octet-stream").decode()
+                "filename "
+                + base64.b64encode(b"photo.bin").decode()
+                + ",folderId "
+                + base64.b64encode(str(fid).encode()).decode()
+                + ",filetype "
+                + base64.b64encode(b"application/octet-stream").decode()
             )
             r = await c.post(
                 f"{B}/uploads",
-                headers={**H, "Upload-Length": str(len(content)), "Upload-Metadata": md, "Tus-Resumable": "1.0.0"},
+                headers={
+                    **H,
+                    "Upload-Length": str(len(content)),
+                    "Upload-Metadata": md,
+                    "Tus-Resumable": "1.0.0",
+                },
             )
             print("tus create:", r.status_code)
             loc = r.headers["location"]
@@ -108,7 +120,11 @@ async def main() -> None:
             print("rename:", r.status_code, r.json().get("name"))
 
             # share
-            r = await c.post(f"{B}/shares", json={"file_id": file_id, "max_downloads": 2, "password": "pw12345"}, headers=H)
+            r = await c.post(
+                f"{B}/shares",
+                json={"file_id": file_id, "max_downloads": 2, "password": "pw12345"},
+                headers=H,
+            )
             print("share:", r.status_code, "qr:", "svg" in r.json().get("qr_svg", "")[:100])
             share = r.json()
             url = share["url"]
@@ -116,9 +132,6 @@ async def main() -> None:
             print("share url:", url)
 
             # anonymous access (locked)
-            import re as _re
-
-            path = _re.sub(r"^https?://[^/]+", "", url)
             r = await c.get(f"{B}/shares/{token}", headers=H)
             print("public info (locked):", r.status_code, r.json()["requires_password"])
             r = await c.get(f"{B}/shares/{token}/files/{file_id}/content")

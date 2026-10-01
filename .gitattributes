@@ -1,0 +1,34 @@
+# Normalise line endings and mark generated files as binary-ish, so a Windows
+# checkout cannot produce a diff where every line changed.
+#
+#   * text=auto  - git decides, per file, instead of assuming everything is text
+#   *.sh, *.ps1 - shell installers must never gain a stray CR
+#   linguist    - keeps the language stats honest; generated assets are excluded
+#                 so the repository is not "mostly JavaScript"
+
+* text=auto
+
+*.sh    text eol=lf
+*.py    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.ps1   text eol=crlf
+*.iss   text eol=crlf
+Dockerfile text eol=lf
+
+# The build output of the web UI. It is committed on purpose (BC-9: the backend
+# serves it, and a clone must be runnable without Node), but it is generated.
+backend/src/localdrop/static/** linguist-generated=true -diff
+backend/src/localdrop/static/assets/** binary
+
+# Not source.
+package-lock.json linguist-generated=true -diff
+
+# Vendored PostgreSQL binaries are downloaded at runtime, never committed.
+**/pg/** linguist-vendored=true
+**/*.jar linguist-vendored=true binary

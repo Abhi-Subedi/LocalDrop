@@ -1,25 +1,68 @@
 # Docker build context exclusions — keep the image lean and secret-free.
+#
+# The image is built from two directories only: backend/ (which now contains
+# the compiled SPA inside the package) and frontend/ (needed to compile it).
+# Everything below is either a secret, a local cache, or something the Dockerfile
+# copies in itself.
 
 .git/
+.github/
 .gitignore
-backend/.venv/
-backend/__pycache__/
-backend/**/__pycache__/
-backend/.pytest_cache/
-backend/.mypy_cache/
-backend/.ruff_cache/
-backend/static/
-frontend/node_modules/
-frontend/dist/
-node_modules/
-data/
-*.part
+.gitattributes
+.editorconfig
+
+# Secrets
 .env
 .env.*
 !.env.example
 *.pem
 *.key
+*.pgdev.env
+
+# Local caches and venvs
+backend/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+
+# node
+node_modules/
+frontend/node_modules/
+frontend/.vite/
+**/*.tsbuildinfo
+
+# Build outputs. frontend/ is compiled in the image's first stage, and the
+# committed SPA under backend/src/localdrop/static is rebuilt there too, so the
+# host's copy must not shadow it.
+dist/
+backend/dist/
+frontend/dist/
+
+# Runtime data and reports
+data/
+**/pg/
+**/*.jar
+*.part
+*.part.*
+*.log
+.coverage-fr.json
+.coverage
+coverage.xml
+htmlcov/
+
+# Documentation: the image does not ship it, and `*.md` is excluded below.
 docs/
 scripts/
+packaging/
 e2e/
+IMPLEMENTATION_PLAN.md
 *.md
+
+# The Inbox, front matter: v1 root with no top-level files.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

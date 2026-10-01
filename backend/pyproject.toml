@@ -1,9 +1,31 @@
 [project]
 name = "localdrop"
-version = "1.1.0"
+# Version is NOT written here: it is read from src/localdrop/__about__.py so the
+# source tree, the wheel, the binary and the HTTP API cannot drift. See
+# [tool.hatch.version] below and scripts/check_version.py.
+dynamic = ["version"]
 description = "Self-hosted, local-network-first file sharing."
+readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-only" }
+authors = [{ name = "Abhinandan Subedi" }]
+keywords = ["file-sharing", "self-hosted", "tus", "self-hosting", "lan", "p2p"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Web Environment",
+  "Framework :: FastAPI",
+  "Intended Audience :: End Users/Desktop",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications :: File Sharing",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Topic :: System :: Filesystems",
+]
 dependencies = [
     "fastapi>=0.115",
     # Floor guarantees the GHSA-7f5h-v6xp-fcq8 multi-range DoS fix; the app
@@ -32,6 +54,19 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+# Frozen-binary toolchain. Kept in an extra (not `dev`) so `pip install .` for a
+# from-source deploy never pulls PyInstaller. Used by packaging/build-binary.py.
+build = [
+    "pyinstaller>=6.10",
+]
+
+[project.urls]
+Homepage = "https://github.com/Abhi-Subedi/LocalDrop"
+Repository = "https://github.com/Abhi-Subedi/LocalDrop"
+Issues = "https://github.com/Abhi-Subedi/LocalDrop/issues"
+Changelog = "https://github.com/Abhi-Subedi/LocalDrop/blob/main/CHANGELOG.md"
+"Security Policy" = "https://github.com/Abhi-Subedi/LocalDrop/security/policy"
+Documentation = "https://github.com/Abhi-Subedi/LocalDrop/tree/main/docs"
 
 [project.scripts]
 localdrop = "localdrop.launcher:main"
@@ -40,8 +75,18 @@ localdrop = "localdrop.launcher:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# --- single source of truth for the version -------------------------------
+[tool.hatch.version]
+path = "src/localdrop/__about__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/localdrop"]
+# Ship the migrations and the built SPA inside the wheel so that `pip install
+# localdrop` and the frozen binary both find them via launcher._bundled().
+artifacts = [
+  "src/localdrop/static/**",
+  "src/localdrop/migrations/**",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -51,13 +96,41 @@ filterwarnings = ["ignore::DeprecationWarning"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S"]
 ignore = ["S101"]  # assert in tests / internal code paths
 
+[tool.ruff.lint.flake8-bugbear]
+# `Depends(...)` / `Query(...)` in a parameter default is how FastAPI declares
+# dependencies; B008 cannot distinguish it from a real mutable default.
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "fastapi.Query",
+  "fastapi.Path",
+  "fastapi.Body",
+  "fastapi.Header",
+  "fastapi.Cookie",
+  "fastapi.Form",
+  "fastapi.File",
+  "fastapi.Security",
+  "alembic.op",
+  "fastapi.Query",
+  "starlette.status",
+]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S105", "S106", "S311"]
+# LAN-first file sharing means binding 0.0.0.0 is the product, not a mistake.
+# Loopback-only is still available via LOCALDROP_HOST=127.0.0.1.
+"src/localdrop/launcher.py" = ["S104"]
+"src/localdrop/api/*.py" = ["S104"]
+"src/localdrop/main.py" = ["S104"]
+# Fixtures and test helpers legitimately hold literal secrets and non-crypto rng.
+"tests/*" = ["S105", "S106", "S311", "S101"]
+"scripts/*" = ["S603", "S607", "S105", "S311"]
+# The one-off setup token is stored in a *cache*, keyed by a constant name.
+"src/localdrop/services/accounts.py" = ["S105"]
 
 [tool.mypy]
 python_version = "3.12"

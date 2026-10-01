@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import errors as err
+from .__about__ import __version__
 from .config import Settings, get_settings
 from .db import dispose_engine, init_engine  # noqa: F401 (init used below)
 from .logging import bind_request_id, get_logger, setup_logging
@@ -30,7 +31,7 @@ from .storage import Storage, set_storage
 log = get_logger(__name__)
 
 APP_DIR = pathlib.Path(__file__).resolve().parent
-SPA_DIST = APP_DIR.parent.parent / "static"  # backend/static (built SPA)
+SPA_DIST = APP_DIR / "static"  # src/localdrop/static (built SPA, shipped in the wheel)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -80,7 +81,9 @@ async def validation_handler(request: Request, exc: RequestValidationError) -> J
 
 async def generic_handler(request: Request, exc: Exception) -> JSONResponse:
     rid = getattr(request.state, "request_id", None)
-    log.error("unhandled_exception", error=str(exc), type=type(exc).__name__, request_id=rid, exc_info=exc)
+    log.error(
+        "unhandled_exception", error=str(exc), type=type(exc).__name__, request_id=rid, exc_info=exc
+    )
     return err.problem_response(500, "internal", "Internal Server Error", None, rid)
 
 
@@ -88,7 +91,6 @@ async def generic_handler(request: Request, exc: Exception) -> JSONResponse:
 
 
 async def job_loop(app: FastAPI) -> None:
-    from sqlalchemy import select
 
     from .db import SessionFactory
     from .services.jobs import cleanup_pass, generate_thumbnails
@@ -122,7 +124,7 @@ def detect_lan_ips() -> list[str]:
     try:
         hostname = socket.gethostname()
         for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
-            ip = info[4][0]
+            ip = str(info[4][0])
             if not ip.startswith("127."):
                 ips.add(ip)
     except OSError:
@@ -147,8 +149,10 @@ def print_lan_banner(settings: Settings, port: int) -> None:
         qr = qrcode.QRCode(border=1)
         qr.add_data(urls[0])
         qr.print_ascii(invert=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        # A missing/broken qrcode install must never stop the server booting;
+        # the URL is printed on the next line regardless.
+        log.debug("qr_banner_unavailable", error=str(exc))
     log.info("localdrop_ready", urls=urls, data_dir=str(settings.data_dir))
     print("\n  LocalDrop is running:")
     for u in urls:
@@ -200,7 +204,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="LocalDrop",
-        version="1.0.0",
+        version=__version__,
         lifespan=lifespan,
         docs_url="/api/docs" if s.dev_mode else None,
         openapi_url="/api/openapi.json" if s.dev_mode else None,
@@ -240,7 +244,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # error handlers
     app.add_exception_handler(err.Problem, err.problem_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(RequestValidationError, validation_handler)
+    # Starlette types add_exception_handler as taking a handler for `Exception`;
+    # RequestValidationError is a subclass, so the narrower annotation is fine.
+    app.add_exception_handler(RequestValidationError, validation_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, generic_handler)
 
     app.add_middleware(RequestContextMiddleware)
@@ -275,6 +281,3 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return FileResponse(spa / "index.html")
 
     return app
-
-
-

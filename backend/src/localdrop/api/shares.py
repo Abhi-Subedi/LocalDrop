@@ -14,19 +14,18 @@ from ..auth import (
     require_read,
     require_write,
 )
-from ..config import get_settings
 from ..db import get_db
 from ..errors import forbidden, not_found
 from ..ratelimit import LIMITS
 from ..schemas import (
-    ShareCreated,
     ShareCreate,
+    ShareCreated,
     ShareOut,
     SharePublicInfo,
     ShareUpdate,
     UnlockRequest,
 )
-from ..services import downloads, shares
+from ..services import shares
 from ..services.tree import get_owned_file_with_blob
 from ..storage import get_storage
 
@@ -34,9 +33,9 @@ router = APIRouter(tags=["shares"])
 
 
 def _base_url(request: Request) -> str:
-    s: "object" = request.app.state.settings
-    if getattr(s, "public_url", ""):
-        return str(getattr(s, "public_url")).rstrip("/")
+    s = request.app.state.settings
+    if s.public_url:
+        return str(s.public_url).rstrip("/")
     proto = request.headers.get("X-Forwarded-Proto", request.url.scheme)
     host = request.headers.get("Host") or request.url.netloc
     return f"{proto}://{host}"
@@ -104,7 +103,9 @@ async def update_ep(
 ) -> ShareOut:
     check_csrf(request)
     share = await shares.update_share(
-        db, p, share_id,
+        db,
+        p,
+        share_id,
         expires_at=body.expires_at,
         max_downloads=body.max_downloads,
         password=body.password,
@@ -149,12 +150,16 @@ def _share_cookie_secure(request: Request) -> bool:
 
 
 @public.get("/shares/{token}", response_model=SharePublicInfo)
-async def public_info_ep(token: str, request: Request, db: AsyncSession = Depends(get_db)) -> SharePublicInfo:
+async def public_info_ep(
+    token: str, request: Request, db: AsyncSession = Depends(get_db)
+) -> SharePublicInfo:
     LIMITS.share.check(_client_ip(request))
     share = await shares.get_public_share(db, token)
     f = await shares.share_file(share)
     await db.commit()
-    unlocked = share.password_hash is None or request.cookies.get(SHARE_COOKIE) == shares.expected_share_key(token)
+    unlocked = share.password_hash is None or request.cookies.get(
+        SHARE_COOKIE
+    ) == shares.expected_share_key(token)
     return SharePublicInfo(
         token=share.token,
         file_id=str(f.id),
@@ -167,15 +172,23 @@ async def public_info_ep(token: str, request: Request, db: AsyncSession = Depend
 
 @public.post("/shares/{token}/unlock", status_code=204)
 async def public_unlock_ep(
-    token: str, body: UnlockRequest, request: Request, response: Response,
+    token: str,
+    body: UnlockRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     LIMITS.share.check(_client_ip(request))
     key = await shares.unlock_share(db, _client_ip(request), token, body.password)
     await db.commit()
     response.set_cookie(
-        SHARE_COOKIE, key, httponly=True, samesite="lax",
-        secure=_share_cookie_secure(request), max_age=3600, path="/",
+        SHARE_COOKIE,
+        key,
+        httponly=True,
+        samesite="lax",
+        secure=_share_cookie_secure(request),
+        max_age=3600,
+        path="/",
     )
     response.status_code = 204
     return response
@@ -183,7 +196,9 @@ async def public_unlock_ep(
 
 @public.get("/shares/{token}/files/{file_id}/content")
 async def public_content_ep(
-    token: str, file_id: uuid_mod.UUID, request: Request,
+    token: str,
+    file_id: uuid_mod.UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     ip = _client_ip(request)
@@ -204,7 +219,11 @@ async def public_content_ep(
     if not allowed:
         raise forbidden("share-limit-reached", "Download limit reached.")
     await shares.record_download(
-        db, share, f.id, request.cookies.get(SHARE_COOKIE) or "anon", ip,
+        db,
+        share,
+        f.id,
+        request.cookies.get(SHARE_COOKIE) or "anon",
+        ip,
         request.headers.get("User-Agent", ""),
     )
     await db.commit()

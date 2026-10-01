@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..audit import audit
 from ..auth import (
     SESSION_COOKIE,
     Principal,
@@ -13,7 +12,6 @@ from ..auth import (
     resolve_principal,
 )
 from ..db import get_db
-from ..errors import unauthenticated
 from ..ratelimit import LIMITS, client_ip_from_headers
 from ..schemas import (
     LoginRequest,
@@ -77,8 +75,11 @@ async def setup_owner_ep(
     user = await accounts.create_owner(db, username, body.password, body.setup_token)
     await db.commit()
     return UserOut(
-        id=user.id, username=user.username, role=user.role,
-        storage_used=0, storage_quota=None,
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        storage_used=0,
+        storage_quota=None,
     )
 
 
@@ -89,7 +90,9 @@ async def login_ep(
     ip = _client_ip(request)
     LIMITS.auth.check(ip, identity=body.username)
     check_csrf(request)
-    user, raw = await accounts.login(db, body.username, body.password, ip, request.headers.get("User-Agent", ""))
+    user, raw = await accounts.login(
+        db, body.username, body.password, ip, request.headers.get("User-Agent", "")
+    )
     await db.commit()
     response.set_cookie(
         SESSION_COOKIE,
@@ -139,8 +142,10 @@ async def sessions_ep(
 
 @router.delete("/auth/sessions/{session_id}", status_code=204)
 async def revoke_session_ep(
-    session_id, request: Request,
-    p: Principal = Depends(resolve_principal), db: AsyncSession = Depends(get_db),
+    session_id,
+    request: Request,
+    p: Principal = Depends(resolve_principal),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     import uuid as uuid_mod
 
@@ -156,8 +161,11 @@ async def me_ep(
 ) -> UserOut:
     used = await accounts.storage_used(db, p.user_id)
     return UserOut(
-        id=p.user_id, username=p.username, role=p.role,
-        storage_used=used, storage_quota=None,
+        id=p.user_id,
+        username=p.username,
+        role=p.role,
+        storage_used=used,
+        storage_quota=None,
     )
 
 
@@ -174,8 +182,9 @@ async def password_ep(
     await db.commit()
     # keep the caller logged in: rotate to a fresh session
     raw = new_token(32)
-    from ..models import AuthSession
     from datetime import UTC, datetime, timedelta
+
+    from ..models import AuthSession
 
     s = request.app.state.settings
     now = datetime.now(UTC)
@@ -191,8 +200,13 @@ async def password_ep(
     db.add(sess)
     await db.commit()
     response.set_cookie(
-        SESSION_COOKIE, raw, httponly=True, samesite="lax",
-        secure=_secure_cookie(request), max_age=s.session_absolute_minutes * 60, path="/",
+        SESSION_COOKIE,
+        raw,
+        httponly=True,
+        samesite="lax",
+        secure=_secure_cookie(request),
+        max_age=s.session_absolute_minutes * 60,
+        path="/",
     )
     response.status_code = 204
     return response
@@ -209,8 +223,12 @@ async def create_token_ep(
     pat, raw = await accounts.create_pat(db, p, body.name, body.scopes)
     await db.commit()
     return TokenCreated(
-        id=pat.id, name=pat.name, scopes=pat.scopes, created_at=pat.created_at,
-        last_used_at=None, token=raw,
+        id=pat.id,
+        name=pat.name,
+        scopes=pat.scopes,
+        created_at=pat.created_at,
+        last_used_at=None,
+        token=raw,
     )
 
 
@@ -220,15 +238,23 @@ async def list_tokens_ep(
 ) -> list[TokenOut]:
     rows = await accounts.list_pats(db, p)
     return [
-        TokenOut(id=t.id, name=t.name, scopes=t.scopes, created_at=t.created_at, last_used_at=t.last_used_at)
+        TokenOut(
+            id=t.id,
+            name=t.name,
+            scopes=t.scopes,
+            created_at=t.created_at,
+            last_used_at=t.last_used_at,
+        )
         for t in rows
     ]
 
 
 @router.delete("/me/tokens/{token_id}", status_code=204)
 async def revoke_token_ep(
-    token_id, request: Request,
-    p: Principal = Depends(resolve_principal), db: AsyncSession = Depends(get_db),
+    token_id,
+    request: Request,
+    p: Principal = Depends(resolve_principal),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     import uuid as uuid_mod
 

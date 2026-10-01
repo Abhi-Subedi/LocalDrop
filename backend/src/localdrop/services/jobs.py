@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
@@ -32,10 +32,10 @@ def _make_thumb_sync(storage: Storage, src: Path, dst_dir: Path, size: int) -> b
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS
     try:
         with Image.open(src) as im:
-            im = im.convert("RGB")
-            im.thumbnail((size, size))
+            rgb = im.convert("RGB")
+            rgb.thumbnail((size, size))
             dst_dir.mkdir(parents=True, exist_ok=True)
-            im.save(dst_dir / f"{size}.webp", "WEBP", quality=80)
+            rgb.save(dst_dir / f"{size}.webp", "WEBP", quality=80)
         return True
     except Exception:
         return False
@@ -46,16 +46,24 @@ async def generate_thumbnails(db: AsyncSession, storage: Storage, file_id, max_n
     from ..services.serving import sniff_mime
 
     rows = (
-        await db.execute(
-            select(File).join(Blob, File.blob_id == Blob.id).where(
-                Blob.status == "verified",
-                File.deleted_at.is_(None),
-                File.mime_type.in_(("image/jpeg", "image/png", "image/webp", "image/gif", "image/avif")),
+        (
+            await db.execute(
+                select(File)
+                .join(Blob, File.blob_id == Blob.id)
+                .where(
+                    Blob.status == "verified",
+                    File.deleted_at.is_(None),
+                    File.mime_type.in_(
+                        ("image/jpeg", "image/png", "image/webp", "image/gif", "image/avif")
+                    ),
+                )
+                .order_by(File.created_at.desc())
+                .limit(max_n)
             )
-            .order_by(File.created_at.desc())
-            .limit(max_n)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     made = 0
     for f in rows:
         if f.blob.sha256 is None:
@@ -93,10 +101,14 @@ async def cleanup_pass(db: AsyncSession, storage: Storage) -> dict[str, int]:
     # 2. trash purge past retention → hard delete files, then blob GC
     cutoff = now - timedelta(days=s.trash_retention_days)
     stale = (
-        await db.execute(
-            select(File).where(File.deleted_at.is_not(None), File.deleted_at < cutoff)
+        (
+            await db.execute(
+                select(File).where(File.deleted_at.is_not(None), File.deleted_at < cutoff)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if stale:
         await db.execute(sa_delete(File).where(File.id.in_([f.id for f in stale])))
     stats["trash_purged"] = len(stale)
@@ -106,13 +118,17 @@ async def cleanup_pass(db: AsyncSession, storage: Storage) -> dict[str, int]:
     # belong to live upload sessions and are handled by expire_sessions —
     # collecting them here would eat in-progress uploads.
     orphan_blobs = (
-        await db.execute(
-            select(Blob).where(
-                Blob.status.in_(("verified", "missing")),
-                Blob.id.not_in(select(File.blob_id)),
+        (
+            await db.execute(
+                select(Blob).where(
+                    Blob.status.in_(("verified", "missing")),
+                    Blob.id.not_in(select(File.blob_id)),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     reclaimed = 0
     for b in orphan_blobs:
         try:
@@ -137,7 +153,9 @@ async def cleanup_pass(db: AsyncSession, storage: Storage) -> dict[str, int]:
         )
     )
     await db.execute(sa_delete(AuthSession).where(AuthSession.expires_at < now - timedelta(days=1)))
-    await db.execute(sa_delete(AuthSession).where(AuthSession.absolute_expires_at < now - timedelta(days=7)))
+    await db.execute(
+        sa_delete(AuthSession).where(AuthSession.absolute_expires_at < now - timedelta(days=7))
+    )
 
     # 4. download_count reconciliation drift logging (spec 04 §5.7)
     await db.flush()

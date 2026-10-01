@@ -15,12 +15,14 @@ def setup_logging() -> None:
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
 
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
-    shared = [
+    shared: list[structlog.typing.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         timestamper,
     ]
-    if settings.log_format == "dev":
+    # "dev" is the historical name for the human-readable renderer; "console"
+    # is an accepted alias so a systemd EnvironmentFile can say what it means.
+    if settings.log_format in ("dev", "console"):
         renderer: structlog.typing.Processor = structlog.dev.ConsoleRenderer()
     else:
         renderer = structlog.processors.JSONRenderer()

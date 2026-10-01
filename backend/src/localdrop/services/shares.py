@@ -10,14 +10,13 @@ from __future__ import annotations
 import uuid as uuid_mod
 from datetime import UTC, datetime
 
-import qrcode
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
 from ..auth import Principal
 from ..config import get_settings
-from ..errors import Problem, forbidden, not_found, validation
+from ..errors import forbidden, not_found, validation
 from ..models import File, Share, ShareDownload, UploadSession  # noqa: F401 (UploadSession unused)
 from ..security import hash_password, share_token, verify_password
 from .tree import get_owned_file
@@ -66,7 +65,6 @@ async def create_share(
 async def get_share_qr_svg(url: str) -> str:
     import io
 
-    import qrcode
     import qrcode.image.svg
 
     img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage, box_size=12)
@@ -77,18 +75,20 @@ async def get_share_qr_svg(url: str) -> str:
 
 async def list_shares(db: AsyncSession, p: Principal) -> list[Share]:
     rows = (
-        await db.execute(
-            select(Share).where(Share.created_by == p.user_id).order_by(Share.created_at.desc())
+        (
+            await db.execute(
+                select(Share).where(Share.created_by == p.user_id).order_by(Share.created_at.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
 async def get_owned_share(db: AsyncSession, p: Principal, share_id: uuid_mod.UUID) -> Share:
     row = (
-        await db.execute(
-            select(Share).where(Share.id == share_id, Share.created_by == p.user_id)
-        )
+        await db.execute(select(Share).where(Share.id == share_id, Share.created_by == p.user_id))
     ).scalar_one_or_none()
     if row is None:
         raise not_found()
@@ -119,7 +119,9 @@ async def update_share(
         share.password_hash = None
     elif password:
         share.password_hash = hash_password(password)
-    await audit(db, "share.update", actor_id=str(p.user_id), target_type="share", target_id=str(share.id))
+    await audit(
+        db, "share.update", actor_id=str(p.user_id), target_type="share", target_id=str(share.id)
+    )
     await db.flush()
     return share
 
@@ -127,7 +129,9 @@ async def update_share(
 async def revoke_share(db: AsyncSession, p: Principal, share_id: uuid_mod.UUID) -> Share:
     share = await get_owned_share(db, p, share_id)
     share.revoked_at = datetime.now(UTC)
-    await audit(db, "share.revoke", actor_id=str(p.user_id), target_type="share", target_id=str(share.id))
+    await audit(
+        db, "share.revoke", actor_id=str(p.user_id), target_type="share", target_id=str(share.id)
+    )
     await db.flush()
     return share
 
@@ -173,7 +177,9 @@ async def unlock_share(db: AsyncSession, ip: str, token: str, password: str) -> 
     if share is None or not _valid(share) or share.password_hash is None:
         raise not_found()
     if not verify_password(share.password_hash, password):
-        await audit(db, "share.password_failed", actor_ip=ip, target_type="share", target_id=str(share.id))
+        await audit(
+            db, "share.password_failed", actor_ip=ip, target_type="share", target_id=str(share.id)
+        )
         raise forbidden("share-locked", "Incorrect password.")
     await audit(db, "share.unlocked", actor_ip=ip, target_type="share", target_id=str(share.id))
     secret = get_settings().secret_key.encode()
@@ -198,19 +204,24 @@ async def increment_download_atomic(db: AsyncSession, share: Share) -> bool:
         .where(
             Share.id == share.id,
             Share.revoked_at.is_(None),
-            (
-                Share.expires_at.is_(None)
-                | (Share.expires_at > datetime.now(UTC))
-            ),
+            (Share.expires_at.is_(None) | (Share.expires_at > datetime.now(UTC))),
             Share.download_count < Share.max_downloads,
         )
         .values(download_count=Share.download_count + 1)
     )
-    return (res.rowcount or 0) == 1
+    # The conditional UPDATE is the lock: exactly one row matches per allowed
+    # download, so rowcount==1 means the counter moved and the share is live.
+    rowcount = getattr(res, "rowcount", 0)
+    return rowcount == 1
 
 
 async def record_download(
-    db: AsyncSession, share: Share, file_id: uuid_mod.UUID, session_key: str, ip: str, user_agent: str
+    db: AsyncSession,
+    share: Share,
+    file_id: uuid_mod.UUID,
+    session_key: str,
+    ip: str,
+    user_agent: str,
 ) -> None:
     """One analytics row per (share, viewer session). Repeat downloads from
     the same session update nothing here — the counter in `shares` is the
@@ -220,7 +231,10 @@ async def record_download(
     stmt = (
         pg_insert(ShareDownload)
         .values(
-            share_id=share.id, session_key=session_key, file_id=file_id, ip=ip,
+            share_id=share.id,
+            session_key=session_key,
+            file_id=file_id,
+            ip=ip,
             user_agent=(user_agent or "")[:512],
         )
         # uq_share_downloads_human is a unique *index* (not a constraint),

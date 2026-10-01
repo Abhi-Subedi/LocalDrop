@@ -1,12 +1,15 @@
-"""System: health endpoints (spec 05 §2.1)."""
+"""System: health, version and build-info endpoints (spec 05 §2.1)."""
 
 from __future__ import annotations
 
+import platform
+import sys
 from typing import Any
 
 from fastapi import APIRouter, Response
 from sqlalchemy import text
 
+from ..__about__ import APP_NAME, __version__
 from ..db import get_db  # noqa: F401
 from ..storage import get_storage
 
@@ -18,9 +21,25 @@ async def live() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@router.get("/version")
+async def version() -> dict[str, Any]:
+    """Public build metadata.
+
+    Intentionally unauthenticated and free of any deployment detail (no data
+    dir, no host, no database URL): the Settings "About" panel and support
+    requests both need it before a user is signed in.
+    """
+    return {
+        "name": APP_NAME,
+        "version": __version__,
+        "python": platform.python_version(),
+        "platform": sys.platform,
+        "frozen": bool(getattr(sys, "frozen", False)),
+    }
+
+
 @router.get("/health/ready")
 async def ready() -> Response:
-    import json
 
     from fastapi.responses import JSONResponse
 

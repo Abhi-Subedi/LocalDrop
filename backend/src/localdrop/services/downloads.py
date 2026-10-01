@@ -8,7 +8,7 @@ No DB writes inside the streaming loop.
 from __future__ import annotations
 
 import re
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from starlette.responses import StreamingResponse
 
@@ -80,7 +80,6 @@ def file_response(
     etag: str | None,
 ) -> StreamingResponse:
     """Build the streaming response for a file's blob."""
-    import os
 
     size = f.size
     # Fail cleanly BEFORE streaming starts: unreadable blob data (missing

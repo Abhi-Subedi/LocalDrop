@@ -4,6 +4,7 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-10-01
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -31,20 +32,27 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=text("true")),
         sa.Column("quota_bytes", sa.BigInteger()),
         sa.Column("email_verified_at", sa.DateTime(timezone=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True)),
         sa.CheckConstraint("role IN ('owner','admin','user','viewer')", name="role_enum"),
     )
     op.create_index("uq_users_username", "users", [func.lower(text("username"))], unique=True)
     op.create_index(
-        "uq_users_email", "users", [func.lower(text("email"))],
-        unique=True, postgresql_where=text("email IS NOT NULL"),
+        "uq_users_email",
+        "users",
+        [func.lower(text("email"))],
+        unique=True,
+        postgresql_where=text("email IS NOT NULL"),
     )
 
     op.create_table(
         "sessions",
         sa.Column("id", sa.Uuid(), primary_key=True),
-        sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("token_hash", sa.Text(), nullable=False),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), server_default=func.now()),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
@@ -60,14 +68,18 @@ def upgrade() -> None:
     op.create_table(
         "personal_access_tokens",
         sa.Column("id", sa.Uuid(), primary_key=True),
-        sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("name", sa.String(100), nullable=False),
         sa.Column("token_hash", sa.Text(), nullable=False),
         sa.Column("scopes", sa.String(16), nullable=False, server_default="read,write"),
         sa.Column("last_used_at", sa.DateTime(timezone=True)),
         sa.Column("expires_at", sa.DateTime(timezone=True)),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True)),
     )
     op.create_index("uq_pat_token_hash", "personal_access_tokens", ["token_hash"], unique=True)
@@ -79,12 +91,20 @@ def upgrade() -> None:
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("owner_id", sa.Uuid(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True)),
     )
     op.create_index(
-        "uq_folders_live_name", "folders", [text("coalesce(parent_id, '00000000-0000-0000-0000-000000000000'::uuid)"), func.lower(text("name"))],
-        unique=True, postgresql_where=text("deleted_at IS NULL"),
+        "uq_folders_live_name",
+        "folders",
+        [
+            text("coalesce(parent_id, '00000000-0000-0000-0000-000000000000'::uuid)"),
+            func.lower(text("name")),
+        ],
+        unique=True,
+        postgresql_where=text("deleted_at IS NULL"),
     )
     op.create_index("ix_folders_owner_id", "folders", ["owner_id"])
     op.create_index("ix_folders_parent_id", "folders", ["parent_id"])
@@ -98,43 +118,61 @@ def upgrade() -> None:
         sa.Column("storage_path", sa.Text(), nullable=False),
         sa.Column("mime_hint", sa.Text()),
         sa.Column("mime_sniffed", sa.Text()),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False
+        ),
     )
     op.create_index(
-        "uq_blobs_sha256", "blobs", ["sha256"],
-        unique=True, postgresql_where=text("status = 'verified'"),
+        "uq_blobs_sha256",
+        "blobs",
+        ["sha256"],
+        unique=True,
+        postgresql_where=text("status = 'verified'"),
     )
     op.create_index("ix_blobs_status", "blobs", ["status"])
 
     op.create_table(
         "files",
         sa.Column("id", sa.Uuid(), primary_key=True),
-        sa.Column("folder_id", sa.Uuid(), sa.ForeignKey("folders.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "folder_id", sa.Uuid(), sa.ForeignKey("folders.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("blob_id", sa.Uuid(), sa.ForeignKey("blobs.id"), nullable=False),
-        sa.Column("mime_type", sa.Text(), nullable=False, server_default="application/octet-stream"),
+        sa.Column(
+            "mime_type", sa.Text(), nullable=False, server_default="application/octet-stream"
+        ),
         sa.Column("size", sa.BigInteger(), nullable=False, server_default=text("0")),
         sa.Column("uploader_id", sa.Uuid(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True)),
     )
     op.create_index(
-        "uq_files_live_name", "files", ["folder_id", func.lower(text("name"))],
-        unique=True, postgresql_where=text("deleted_at IS NULL"),
+        "uq_files_live_name",
+        "files",
+        ["folder_id", func.lower(text("name"))],
+        unique=True,
+        postgresql_where=text("deleted_at IS NULL"),
     )
     op.create_index("ix_files_folder_id", "files", ["folder_id"])
     op.create_index("ix_files_blob_id", "files", ["blob_id"])
     op.create_index("ix_files_uploader_id", "files", ["uploader_id"])
     op.create_index(
-        "ix_files_name_trgm", "files", [text("lower(name) gin_trgm_ops")],
+        "ix_files_name_trgm",
+        "files",
+        [text("lower(name) gin_trgm_ops")],
         postgresql_using="gin",
     )
 
     op.create_table(
         "upload_sessions",
         sa.Column("id", sa.Uuid(), primary_key=True),
-        sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("folder_id", sa.Uuid(), sa.ForeignKey("folders.id"), nullable=False),
         sa.Column("file_name", sa.String(255), nullable=False),
         sa.Column("mime_type", sa.Text()),
@@ -164,7 +202,9 @@ def upgrade() -> None:
         sa.Column("password_hash", sa.Text()),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now()),
-        sa.CheckConstraint("(file_id IS NOT NULL) <> (folder_id IS NOT NULL)", name="single_target"),
+        sa.CheckConstraint(
+            "(file_id IS NOT NULL) <> (folder_id IS NOT NULL)", name="single_target"
+        ),
         sa.CheckConstraint("target_type IN ('file','folder')", name="target_type_enum"),
     )
     op.create_index("uq_shares_token", "shares", ["token"], unique=True)
@@ -173,14 +213,18 @@ def upgrade() -> None:
     op.create_table(
         "share_downloads",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("share_id", sa.Uuid(), sa.ForeignKey("shares.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "share_id", sa.Uuid(), sa.ForeignKey("shares.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("session_key", sa.String(64), nullable=False),
         sa.Column("file_id", sa.Uuid(), sa.ForeignKey("files.id"), nullable=False),
         sa.Column("ip", sa.Text()),
         sa.Column("user_agent", sa.Text()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now()),
     )
-    op.create_index("uq_share_downloads_human", "share_downloads", ["share_id", "session_key"], unique=True)
+    op.create_index(
+        "uq_share_downloads_human", "share_downloads", ["share_id", "session_key"], unique=True
+    )
 
     op.create_table(
         "audit_events",
@@ -191,7 +235,9 @@ def upgrade() -> None:
         sa.Column("target_type", sa.Text()),
         sa.Column("target_id", sa.Uuid()),
         sa.Column("details", JSONB(), server_default=text("'{}'")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=func.now(), nullable=False
+        ),
     )
     op.create_index("ix_audit_actor_created", "audit_events", ["actor_id", "created_at"])
     op.create_index("ix_audit_action_created", "audit_events", ["action", "created_at"])
@@ -206,7 +252,16 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     for t in (
-        "settings", "audit_events", "share_downloads", "shares", "upload_sessions",
-        "files", "blobs", "folders", "personal_access_tokens", "sessions", "users",
+        "settings",
+        "audit_events",
+        "share_downloads",
+        "shares",
+        "upload_sessions",
+        "files",
+        "blobs",
+        "folders",
+        "personal_access_tokens",
+        "sessions",
+        "users",
     ):
         op.drop_table(t)

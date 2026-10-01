@@ -24,9 +24,27 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import LargeBinary
 
-from ..models.base import PkMixin, TimestampsMixin, new_uuid, utcnow
 from ..db import Base
 from .base import PkMixin, TimestampsMixin, new_uuid, utcnow
+
+__all__ = [
+    "AuditEvent",
+    "AuthSession",
+    "Base",
+    "Blob",
+    "File",
+    "Folder",
+    "PkMixin",
+    "PersonalAccessToken",
+    "Setting",
+    "Share",
+    "ShareDownload",
+    "TimestampsMixin",
+    "UploadSession",
+    "User",
+    "new_uuid",
+    "utcnow",
+]
 
 
 class User(Base, PkMixin, TimestampsMixin):
@@ -152,7 +170,9 @@ class File(Base, PkMixin, TimestampsMixin):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     blob_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("blobs.id"), nullable=False)
-    mime_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="application/octet-stream")
+    mime_type: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="application/octet-stream"
+    )
     size: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     uploader_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -211,7 +231,9 @@ class Share(Base, PkMixin):
     token: Mapped[str] = mapped_column(String(64), nullable=False)
     target_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="file")
     file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("files.id"), nullable=True)
-    folder_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("folders.id"), nullable=True)
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("folders.id"), nullable=True
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     max_downloads: Mapped[int | None] = mapped_column(Integer)
@@ -223,9 +245,7 @@ class Share(Base, PkMixin):
     file: Mapped[File | None] = relationship(lazy="joined", foreign_keys=[file_id])
 
     __table_args__ = (
-        CheckConstraint(
-            "(file_id IS NOT NULL) <> (folder_id IS NOT NULL)", name="single_target"
-        ),
+        CheckConstraint("(file_id IS NOT NULL) <> (folder_id IS NOT NULL)", name="single_target"),
         CheckConstraint("target_type IN ('file','folder')", name="target_type_enum"),
         Index("uq_shares_token", "token", unique=True),
         Index("ix_shares_created_by", "created_by"),
@@ -245,9 +265,7 @@ class ShareDownload(Base):
     user_agent: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    __table_args__ = (
-        Index("uq_share_downloads_human", "share_id", "session_key", unique=True),
-    )
+    __table_args__ = (Index("uq_share_downloads_human", "share_id", "session_key", unique=True),)
 
 
 class AuditEvent(Base, PkMixin):
@@ -258,7 +276,9 @@ class AuditEvent(Base, PkMixin):
     action: Mapped[str] = mapped_column(Text, nullable=False)
     target_type: Mapped[str | None] = mapped_column(Text)
     target_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
-    details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'"))
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (

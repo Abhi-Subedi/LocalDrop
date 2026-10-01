@@ -1,18 +1,27 @@
 {
-  "name": "frontend",
+  "name": "localdrop-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.1.0",
   "type": "module",
+  "description": "LocalDrop web UI (React SPA built by Vite, served by the FastAPI backend).",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Abhi-Subedi/LocalDrop.git",
+    "directory": "frontend"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "typecheck": "tsc -b --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
-    "@tanstack/react-query": "^5.104.0",
-    "@tanstack/react-router": "^1.170.41",
     "lucide-react": "^1.49.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

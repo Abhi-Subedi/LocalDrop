@@ -24,9 +24,7 @@ PAGE_SIZE_MAX = 500
 
 async def get_owned_folder(db: AsyncSession, p: Principal, folder_id: uuid.UUID) -> Folder:
     row = (
-        await db.execute(
-            select(Folder).where(Folder.id == folder_id, Folder.owner_id == p.user_id)
-        )
+        await db.execute(select(Folder).where(Folder.id == folder_id, Folder.owner_id == p.user_id))
     ).scalar_one_or_none()
     if row is None:
         raise not_found()
@@ -44,12 +42,16 @@ async def get_owned_file(db: AsyncSession, p: Principal, file_id: uuid.UUID) -> 
 
 async def get_owned_file_with_blob(db: AsyncSession, p: Principal, file_id: uuid.UUID) -> File:
     row = (
-        await db.execute(
-            select(File).join(Blob, File.blob_id == Blob.id).where(
-                File.id == file_id, File.uploader_id == p.user_id
+        (
+            await db.execute(
+                select(File)
+                .join(Blob, File.blob_id == Blob.id)
+                .where(File.id == file_id, File.uploader_id == p.user_id)
             )
         )
-    ).unique().scalar_one_or_none()
+        .unique()
+        .scalar_one_or_none()
+    )
     if row is None:
         raise not_found()
     return row
@@ -58,7 +60,9 @@ async def get_owned_file_with_blob(db: AsyncSession, p: Principal, file_id: uuid
 # ---- folders ----
 
 
-async def create_folder(db: AsyncSession, p: Principal, parent_id: uuid.UUID | None, name: str) -> Folder:
+async def create_folder(
+    db: AsyncSession, p: Principal, parent_id: uuid.UUID | None, name: str
+) -> Folder:
     if parent_id is not None:
         parent = await get_owned_folder(db, p, parent_id)
         if parent.deleted_at is not None:
@@ -71,7 +75,11 @@ async def create_folder(db: AsyncSession, p: Principal, parent_id: uuid.UUID | N
 
 
 async def _check_name_free(
-    db: AsyncSession, p: Principal, parent_id: uuid.UUID, name: str, exclude: uuid.UUID | None
+    db: AsyncSession,
+    p: Principal,
+    parent_id: uuid.UUID | None,
+    name: str,
+    exclude: uuid.UUID | None,
 ) -> None:
     q = select(Folder.id).where(
         Folder.parent_id.is_(None) if parent_id is None else Folder.parent_id == parent_id,
@@ -151,20 +159,33 @@ async def delete_folder(db: AsyncSession, p: Principal, folder_id: uuid.UUID) ->
     frontier = [folder.id]
     while frontier:
         rows = (
-            await db.execute(
-                select(Folder.id).where(Folder.parent_id.in_(frontier), Folder.deleted_at.is_(None))
+            (
+                await db.execute(
+                    select(Folder.id).where(
+                        Folder.parent_id.in_(frontier), Folder.deleted_at.is_(None)
+                    )
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         ids.extend(rows)
         frontier = list(rows)
     now = datetime.now(UTC)
+    await db.execute(update(Folder).where(Folder.id.in_(ids)).values(deleted_at=now))
     await db.execute(
-        update(Folder).where(Folder.id.in_(ids)).values(deleted_at=now)
+        update(File)
+        .where(File.folder_id.in_(ids), File.deleted_at.is_(None))
+        .values(deleted_at=now)
     )
-    await db.execute(
-        update(File).where(File.folder_id.in_(ids), File.deleted_at.is_(None)).values(deleted_at=now)
+    await audit(
+        db,
+        "folder.delete",
+        actor_id=str(p.user_id),
+        target_type="folder",
+        target_id=str(folder.id),
+        details={"count": len(ids)},
     )
-    await audit(db, "folder.delete", actor_id=str(p.user_id), target_type="folder", target_id=str(folder.id), details={"count": len(ids)})
     await db.flush()
     return len(ids)
 
@@ -184,8 +205,10 @@ async def restore_folder(db: AsyncSession, p: Principal, folder_id: uuid.UUID) -
     frontier = [folder.id]
     while frontier:
         rows = (
-            await db.execute(select(Folder.id).where(Folder.parent_id.in_(frontier)))
-        ).scalars().all()
+            (await db.execute(select(Folder.id).where(Folder.parent_id.in_(frontier))))
+            .scalars()
+            .all()
+        )
         ids.extend(rows)
         frontier = list(rows)
     now = datetime.now(UTC)
@@ -222,48 +245,59 @@ async def list_children(
     kind: str | None = None,
     sort: str = "name",
     q: str | None = None,
-    after: tuple[str, str] | None = None,  # (sort_value, id) cursor
+    after: tuple[str | int | None, str] | None = None,  # (sort_value, id) cursor
     limit: int = PAGE_SIZE_DEFAULT,
 ) -> tuple[list[EntryOut], str | None]:
     limit = min(max(limit, 1), PAGE_SIZE_MAX)
     entries: list[EntryOut] = []
 
     if kind in (None, "folder"):
-        qf = select(Folder).where(
-            Folder.owner_id == p.user_id, Folder.deleted_at.is_(None)
-        )
+        qf = select(Folder).where(Folder.owner_id == p.user_id, Folder.deleted_at.is_(None))
         if parent_id is None:
             qf = qf.where(Folder.parent_id.is_(None))
         else:
             qf = qf.where(Folder.parent_id == parent_id)
         if q:
             qf = qf.where(Folder.name.ilike(f"%{_escape_like(q)}%"))
-        rows = (await db.execute(qf)).scalars().all()
+        folder_rows = (await db.execute(qf)).scalars().all()
         entries.extend(
             EntryOut(
-                id=r.id, kind="folder", name=r.name, size=0, mime_type=None,
-                created_at=r.created_at, updated_at=r.updated_at,
+                id=r.id,
+                kind="folder",
+                name=r.name,
+                size=0,
+                mime_type=None,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
             )
-            for r in rows
+            for r in folder_rows
         )
 
     if kind in (None, "file"):
-        qf = (
+        qfile = (
             select(File)
             .join(Folder, File.folder_id == Folder.id)
-            .where(Folder.owner_id == p.user_id, File.deleted_at.is_(None), Folder.deleted_at.is_(None))
+            .where(
+                Folder.owner_id == p.user_id, File.deleted_at.is_(None), Folder.deleted_at.is_(None)
+            )
         )
         if parent_id is not None:
-            qf = qf.where(File.folder_id == parent_id)
+            qfile = qfile.where(File.folder_id == parent_id)
         if q:
-            qf = qf.where(File.name.ilike(f"%{_escape_like(q)}%"))
-        rows = (await db.execute(qf)).unique().scalars().all()
+            qfile = qfile.where(File.name.ilike(f"%{_escape_like(q)}%"))
+        file_rows = (await db.execute(qfile)).unique().scalars().all()
         entries.extend(
             EntryOut(
-                id=r.id, kind="file", name=r.name, size=r.size, mime_type=r.mime_type,
-                hash_status=r.blob.status, created_at=r.created_at, updated_at=r.updated_at,
+                id=r.id,
+                kind="file",
+                name=r.name,
+                size=r.size,
+                mime_type=r.mime_type,
+                hash_status=r.blob.status,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
             )
-            for r in rows
+            for r in file_rows
         )
 
     # sort + cursor (name|size|created_at, asc only for V1 simplicity of cursor)
@@ -349,19 +383,26 @@ async def copy_file(
         raise not_found()
     name = f.name
     existing = (
-        await db.execute(
-            select(File.name).where(
-                File.folder_id == folder_id, File.deleted_at.is_(None),
-                func.lower(File.name) == name.lower(),
+        (
+            await db.execute(
+                select(File.name).where(
+                    File.folder_id == folder_id,
+                    File.deleted_at.is_(None),
+                    func.lower(File.name) == name.lower(),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if existing:
         base, dot, ext = name.rpartition(".")
         stem = base if dot else name
         suffix = ext if dot else ""
         n = 2
-        while f"{stem} ({n}){('.' + suffix) if suffix else ''}".lower() in {e.lower() for e in existing}:
+        while f"{stem} ({n}){('.' + suffix) if suffix else ''}".lower() in {
+            e.lower() for e in existing
+        }:
             n += 1
         name = f"{stem} ({n}){('.' + suffix) if suffix else ''}"
     copy = File(
@@ -409,25 +450,43 @@ async def restore_file(db: AsyncSession, p: Principal, file_id: uuid.UUID) -> Fi
 
 async def list_trash(db: AsyncSession, p: Principal) -> list[EntryOut]:
     files = (
-        await db.execute(
-            select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not(None))
+        (
+            await db.execute(
+                select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not(None))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     folders = (
-        await db.execute(
-            select(Folder).where(Folder.owner_id == p.user_id, Folder.deleted_at.is_not(None))
+        (
+            await db.execute(
+                select(Folder).where(Folder.owner_id == p.user_id, Folder.deleted_at.is_not(None))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     items = [
         EntryOut(
-            id=f.id, kind="file", name=f.name, size=f.size, mime_type=f.mime_type,
-            created_at=f.created_at, deleted_at=f.deleted_at,
+            id=f.id,
+            kind="file",
+            name=f.name,
+            size=f.size,
+            mime_type=f.mime_type,
+            created_at=f.created_at,
+            deleted_at=f.deleted_at,
         )
         for f in files
     ] + [
         EntryOut(
-            id=fo.id, kind="folder", name=fo.name, size=0, mime_type=None,
-            created_at=fo.created_at, deleted_at=fo.deleted_at,
+            id=fo.id,
+            kind="folder",
+            name=fo.name,
+            size=0,
+            mime_type=None,
+            created_at=fo.created_at,
+            deleted_at=fo.deleted_at,
         )
         for fo in folders
     ]
@@ -437,15 +496,17 @@ async def list_trash(db: AsyncSession, p: Principal) -> list[EntryOut]:
 async def purge_trash(db: AsyncSession, p: Principal, storage) -> int:
     """Hard-delete trash contents; blob GC happens in cleanup job."""
     files = (
-        await db.execute(
-            select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not(None))
+        (
+            await db.execute(
+                select(File).where(File.uploader_id == p.user_id, File.deleted_at.is_not(None))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     n = len(files)
     if n:
-        await db.execute(
-            delete_files_by_ids([f.id for f in files])
-        )
+        await db.execute(delete_files_by_ids([f.id for f in files]))
     await audit(db, "trash.purge", actor_id=str(p.user_id), details={"count": n})
     await db.flush()
     return n

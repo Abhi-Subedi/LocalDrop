@@ -21,6 +21,7 @@ import tarfile
 import time
 import urllib.request
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
 
 PG_VERSION = "16.4.0"
@@ -54,13 +55,20 @@ class EmbeddedPostgres:
     def _exe(self, name: str) -> Path:
         return self.bin_dir / (name + (".exe" if os.name == "nt" else ""))
 
-    def _run(self, cmd: list[str], capture: bool = True) -> subprocess.CompletedProcess:
+    def _run(self, cmd: Sequence[Path | str], capture: bool = True) -> subprocess.CompletedProcess:
         # pg_ctl start MUST NOT use pipes: postgres inherits them and the
         # pipe never hits EOF, so communicate() blocks forever.
-        kwargs = {"capture_output": True, "text": True} if capture else {
-            "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
-        }
-        return subprocess.run([str(c) for c in cmd], **kwargs)
+        kwargs = (
+            {"capture_output": True, "text": True}
+            if capture
+            else {
+                "stdout": subprocess.DEVNULL,
+                "stderr": subprocess.DEVNULL,
+            }
+        )
+        # Every element of `cmd` is a Path built by _exe() or a literal flag
+        # below; no shell, no user input reaches this call.
+        return subprocess.run([str(c) for c in cmd], **kwargs)  # noqa: S603
 
     def _download(self) -> Path:
         plat = _plat_slug()
@@ -70,7 +78,9 @@ class EmbeddedPostgres:
         url = _MAVEN.format(plat=plat, v=PG_VERSION)
         print(f"  Downloading embedded PostgreSQL {PG_VERSION} ({plat})…")
         part = jar.with_suffix(".part")
-        with urllib.request.urlopen(url, timeout=120) as resp, open(part, "wb") as out:
+        # `url` is built from the module-level _MAVEN constant and a
+        # platform slug; no user-controlled scheme, so urlopen is safe here.
+        with urllib.request.urlopen(url, timeout=120) as resp, open(part, "wb") as out:  # noqa: S310
             total = int(resp.headers.get("Content-Length", 0))
             done = 0
             while True:
@@ -103,25 +113,49 @@ class EmbeddedPostgres:
         first_run = not self.data_dir.exists()
         if first_run:
             print("  Initialising embedded database (first run)…")
-            r = self._run([
-                self._exe("initdb"), "-D", self.data_dir, "-U", "postgres",
-                "-A", "trust", "-E", "UTF8", "--no-instructions",
-            ])
+            r = self._run(
+                [
+                    self._exe("initdb"),
+                    "-D",
+                    self.data_dir,
+                    "-U",
+                    "postgres",
+                    "-A",
+                    "trust",
+                    "-E",
+                    "UTF8",
+                    "--no-instructions",
+                ]
+            )
             if r.returncode != 0:
                 detail = (r.stderr or r.stdout or "").strip().splitlines()
                 hint = ""
-                if "administrator" in (r.stderr or "").lower() or "root" in (r.stderr or "").lower():
+                if (
+                    "administrator" in (r.stderr or "").lower()
+                    or "root" in (r.stderr or "").lower()
+                ):
                     hint = " (do not run LocalDrop as Administrator/root — run it as a normal user)"
                 raise RuntimeError("initdb failed" + hint + ": " + "; ".join(detail[-2:]))
-        r = self._run([
-            self._exe("pg_ctl"), "-D", self.data_dir,
-            "-o", f'-p {self.port} -k "{self.root}"', "-l", self.log_file, "start",
-        ], capture=False)
+        r = self._run(
+            [
+                self._exe("pg_ctl"),
+                "-D",
+                self.data_dir,
+                "-o",
+                f'-p {self.port} -k "{self.root}"',
+                "-l",
+                self.log_file,
+                "start",
+            ],
+            capture=False,
+        )
         if r.returncode != 0:
             # uncaptured run gives no output; check readiness instead
             r = subprocess.CompletedProcess(r.args, 1, "", "")
         if r.returncode != 0:
-            raise RuntimeError("pg_ctl start failed: " + (r.stderr or r.stdout or "").strip()[-300:])
+            raise RuntimeError(
+                "pg_ctl start failed: " + (r.stderr or r.stdout or "").strip()[-300:]
+            )
         for _ in range(60):
             with socket.socket() as sock:
                 sock.settimeout(1.0)
@@ -129,13 +163,16 @@ class EmbeddedPostgres:
                     break
             time.sleep(0.5)
         else:
-            raise RuntimeError("embedded PostgreSQL did not become ready; see " + str(self.log_file))
+            raise RuntimeError(
+                "embedded PostgreSQL did not become ready; see " + str(self.log_file)
+            )
         if first_run:
             import psycopg
 
             with psycopg.connect(
                 f"host=127.0.0.1 port={self.port} user=postgres dbname=postgres",
-                connect_timeout=5, autocommit=True,
+                connect_timeout=5,
+                autocommit=True,
             ) as c:
                 c.execute("CREATE DATABASE localdrop")
 

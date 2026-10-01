@@ -31,7 +31,9 @@ async def _issue_setup_token(db: AsyncSession) -> str:
             key=SETUP_TOKEN_KEY,
             value={
                 "hash": hash_token(token),
-                "expires": (datetime.now(UTC) + timedelta(minutes=SETUP_TOKEN_TTL_MINUTES)).isoformat(),
+                "expires": (
+                    datetime.now(UTC) + timedelta(minutes=SETUP_TOKEN_TTL_MINUTES)
+                ).isoformat(),
             },
         )
     )
@@ -60,7 +62,9 @@ async def create_owner(db: AsyncSession, username: str, password: str, setup_tok
         raise Problem(410, "setup-expired", "Setup Token Invalid")
     expires = datetime.fromisoformat(row.value["expires"])
     if datetime.now(UTC) >= expires:
-        raise Problem(410, "setup-expired", "Setup Token Expired", "Restart the server for a new token.")
+        raise Problem(
+            410, "setup-expired", "Setup Token Expired", "Restart the server for a new token."
+        )
     from ..security import constant_time_equals
 
     if not constant_time_equals(row.value["hash"], hash_token(setup_token)):
@@ -83,9 +87,7 @@ async def login(
     db: AsyncSession, username: str, password: str, ip: str, user_agent: str
 ) -> tuple[User, str]:
     user = (
-        await db.execute(
-            select(User).where(func.lower(User.username) == username.lower().strip())
-        )
+        await db.execute(select(User).where(func.lower(User.username) == username.lower().strip()))
     ).scalar_one_or_none()
     # Constant-shape: verify even when user missing (cheap random hash) to
     # avoid trivially-timed user enumeration.
@@ -133,14 +135,18 @@ async def touch_session(db: AsyncSession, principal: Principal) -> None:
     principal.session.expires_at = min(new_expiry, cap)
 
 
-async def list_sessions(db: AsyncSession, principal: Principal) -> list[object]:
+async def list_sessions(db: AsyncSession, principal: Principal) -> list[AuthSession]:
     rows = (
-        await db.execute(
-            select(AuthSession)
-            .where(AuthSession.user_id == principal.user_id, AuthSession.revoked_at.is_(None))
-            .order_by(AuthSession.last_seen_at.desc())
+        (
+            await db.execute(
+                select(AuthSession)
+                .where(AuthSession.user_id == principal.user_id, AuthSession.revoked_at.is_(None))
+                .order_by(AuthSession.last_seen_at.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -158,9 +164,7 @@ async def revoke_session(db: AsyncSession, principal: Principal, session_id: uui
     await audit(db, "auth.session_revoked", actor_id=str(principal.user_id))
 
 
-async def change_password(
-    db: AsyncSession, principal: Principal, current: str, new: str
-) -> None:
+async def change_password(db: AsyncSession, principal: Principal, current: str, new: str) -> None:
     user = await db.get(User, principal.user_id)
     if user is None or not verify_password(user.password_hash, current):
         raise bad_credentials()
@@ -192,7 +196,9 @@ async def storage_used(db: AsyncSession, user_id: uuid.UUID) -> int:
 # ---- PATs ----
 
 
-async def create_pat(db: AsyncSession, principal: Principal, name: str, scopes: str) -> tuple[PersonalAccessToken, str]:
+async def create_pat(
+    db: AsyncSession, principal: Principal, name: str, scopes: str
+) -> tuple[PersonalAccessToken, str]:
     raw = new_token(24)
     pat = PersonalAccessToken(
         user_id=principal.user_id, name=name, token_hash=hash_token(raw), scopes=scopes
@@ -205,12 +211,19 @@ async def create_pat(db: AsyncSession, principal: Principal, name: str, scopes: 
 
 async def list_pats(db: AsyncSession, principal: Principal) -> list[PersonalAccessToken]:
     rows = (
-        await db.execute(
-            select(PersonalAccessToken)
-            .where(PersonalAccessToken.user_id == principal.user_id, PersonalAccessToken.revoked_at.is_(None))
-            .order_by(PersonalAccessToken.created_at.desc())
+        (
+            await db.execute(
+                select(PersonalAccessToken)
+                .where(
+                    PersonalAccessToken.user_id == principal.user_id,
+                    PersonalAccessToken.revoked_at.is_(None),
+                )
+                .order_by(PersonalAccessToken.created_at.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 

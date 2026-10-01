@@ -55,7 +55,9 @@ def decide_serving(declared_mime: str, sniffed_mime: str | None) -> ServingDecis
     Either side can force attachment: a declared image/svg+xml served from
     bytes that sniff as text/plain is still active content.
     """
-    effective = (sniffed_mime or declared_mime or "application/octet-stream").split(";")[0].strip().lower()
+    effective = (
+        (sniffed_mime or declared_mime or "application/octet-stream").split(";")[0].strip().lower()
+    )
     if effective in ("", "application/octet-stream") and declared_mime:
         effective = declared_mime.split(";")[0].strip().lower()
     declared = (declared_mime or "").split(";")[0].strip().lower()
