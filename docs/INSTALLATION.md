@@ -64,7 +64,7 @@ docker compose logs -f app
 The log prints your LAN URL and a QR code.
 
 **Optional:** `LOCALDROP_HOST_PORT` (default `8080`) if the port is taken.
-`LOCALDROP_IMAGE_TAG=1.1.0` in `.env` pins a specific version instead of
+`LOCALDROP_IMAGE_TAG=<version>` in `.env` pins a specific version instead of
 tracking `:stable`. Everything else: [CONFIGURATION.md](CONFIGURATION.md).
 
 ### Running without the repository
@@ -125,7 +125,7 @@ less install.sh && sudo sh install.sh
 
 | Option | Effect |
 |---|---|
-| `--version 1.1.0` | Install a specific release instead of the newest |
+| `--version <version>` | Install a specific release instead of the newest |
 | `--port 9000` | Listen on a different port |
 | `--data-dir /mnt/big/localdrop` | Store files somewhere with more room |
 | `--no-start` | Install everything, do not start the service yet |
@@ -133,7 +133,7 @@ less install.sh && sudo sh install.sh
 | `--prefix ~/.local` | Install the binary somewhere other than `/usr/local/bin` |
 
 ```bash
-sudo sh install.sh --version 1.1.0 --port 9000
+sudo sh install.sh --version <version> --port 9000
 sudo sh install.sh --no-service     # e.g. on a host without systemd
 ```
 
@@ -214,7 +214,7 @@ uninstaller under Settings → Apps.
 > The binaries are not code-signed, so SmartScreen shows a warning on first
 > run. Choose **More info → Run anyway** if you downloaded it from the official
 > releases page. Verify the download if you are unsure:
-> `Get-FileHash .\LocalDrop-1.1.0-windows-x64-setup.exe -Algorithm SHA256` and
+> `Get-FileHash .\LocalDrop-<version>-windows-x64-setup.exe -Algorithm SHA256` and
 > compare it with the `SHA256SUMS` from the same release.
 
 ### Portable
@@ -234,7 +234,7 @@ This downloads, verifies, installs, and then runs `localdrop --check` to prove
 the install works before it reports success. Options:
 
 ```powershell
-.\install.ps1 -Version 1.1.0        # a specific release
+.\install.ps1 -Version <version>    # a specific release
 .\install.ps1 -StartServer          # launch it when you are done
 .\install.ps1 -NoShortcuts          # no Start Menu or desktop entry
 ```

@@ -148,6 +148,27 @@ def _self_check() -> int:
         if not ok:
             problems.append(f"missing bundled resource: {rel} (looked in {path})")
 
+    # The SPA must be reported through the *app's* resolver, not this file's.
+    # `--check` verified static/index.html via _bundled() while create_app() used
+    # its own SPA_DIST, the two disagreed inside a bundle, and every published
+    # binary served the API but 404'd on `/` - with --check green throughout.
+    # A verifier that does not use the code's own resolution proves nothing, so
+    # assert the two agree and that the app would actually find it.
+    from .paths import spa_dist
+
+    app_spa = spa_dist()
+    agrees = app_spa == _bundled("static")
+    has_index = (app_spa / "index.html").is_file()
+    print(f"  {'ok  ' if agrees else 'FAIL'}  SPA resolver agrees with the server")
+    if not agrees:
+        problems.append(
+            f"the server resolves the SPA to {app_spa} but --check looked in "
+            f"{_bundled('static')}; the web UI will 404"
+        )
+    print(f"  {'ok  ' if has_index else 'FAIL'}  web UI reachable at /  ({app_spa})")
+    if not has_index:
+        problems.append(f"the web UI is missing: {app_spa / 'index.html'}")
+
     versions_dir = _bundled("migrations") / "versions"
     revisions = sorted(p.name for p in versions_dir.glob("*.py")) if versions_dir.is_dir() else []
     print(f"  {'ok  ' if revisions else 'FAIL'}  migrations: {len(revisions)} revision(s)")

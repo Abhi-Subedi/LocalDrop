@@ -80,7 +80,7 @@ Claims in the specification carry one of four markers. Anything unmarked is
 - **Open:** Phase-2+ questions in `10-risks-open-questions.md` — the email/SMTP
   role, locale choices, and mDNS feasibility, which remains
   `[NEEDS VALIDATION]`. Note that `LOCALDROP_MDNS_ENABLED` is a reserved
-  setting and is not used by 1.1.0.
+  setting and is not used yet.
 - **Future:** the CLI client (spec 08 §11), S3/MinIO backends, multi-volume
   storage, OAuth, multi-user accounts.
 

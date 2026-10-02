@@ -50,7 +50,7 @@ Every setting arrives as a `LOCALDROP_*` environment variable (12-factor).
 | `LOCALDROP_LOG_FORMAT` | `json` | `json` for log aggregation, `console` (alias `dev`) for a human reading `journalctl`. |
 | `LOCALDROP_DEV_MODE` | `false` | **Never in production.** Relaxes the secret-key requirement and enables `/api/docs` and CORS. |
 | `LOCALDROP_CORS_ORIGINS` | *(empty)* | Dev only. Comma-separated origins, e.g. `http://localhost:5173` for `npm run dev`. |
-| `LOCALDROP_MDNS_ENABLED` | `false` | Reserved for LAN service advertisement; not used by 1.1.0. |
+| `LOCALDROP_MDNS_ENABLED` | `false` | Reserved for LAN service advertisement; not used yet. |
 
 ### Public demo mode
 
@@ -88,7 +88,7 @@ the signal.
 | `LOCALDROP_VERSION` | *(set at build)* | Version reported by `--version` and `GET /api/v1/version`. Injected by Docker and the frozen binary. |
 | `LOCALDROP_BACKUP_BEFORE_MIGRATE` | `1` in compose | `pg_dump` to `$LOCALDROP_DATA_DIR/backups/` before auto-migrating. The container aborts on failure. |
 | `POSTGRES_PASSWORD` | *(required, compose)* | Password for the compose `postgres` service; compose interpolates it into `LOCALDROP_DATABASE_URL`. |
-| `LOCALDROP_IMAGE_TAG` | `stable` | Compose only. Image tag to pull, e.g. `1.1.0` to pin a reproducible deploy. |
+| `LOCALDROP_IMAGE_TAG` | `stable` | Compose only. Image tag to pull, e.g. a released `<version>` to pin a reproducible deploy. |
 
 ## Reverse proxies
 

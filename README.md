@@ -196,7 +196,7 @@ plan — lives in [`docs/spec/`](docs/spec/) and [`docs/adr/`](docs/adr/).
 
 ## Status
 
-1.1.0 is a working release. Known limits, stated plainly:
+1.1.2 is a working release. Known limits, stated plainly:
 
 - Single owner account. One account owns everything; sharing with other *users*
   is not a feature — use public share links.
