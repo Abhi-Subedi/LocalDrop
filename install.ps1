@@ -49,13 +49,53 @@ function Write-Warn2  { param($m) Write-Host "  $m" -ForegroundColor Yellow }
 function Fail         { param($m) Write-Host "`n  ERROR: $m`n" -ForegroundColor Red; exit 1 }
 
 # --- resolve "stable" / "latest" to a real version -------------------------
+# Two sources, tried in order:
+#
+#   1. The releases API. "latest" there is by definition a published,
+#      non-prerelease release, so it can never name a version whose assets do
+#      not exist. That correctness is the whole reason it goes first.
+#   2. The VERSION file on main. Kept as a fallback because networks are
+#      uneven: some reach raw.githubusercontent.com and not api.github.com,
+#      some the reverse. Depending on a single host made every install hostage
+#      to that host.
+#
+# This previously read only the VERSION file, so a 404 from
+# raw.githubusercontent.com aborted with a bare "404" and no clue which host had
+# failed or what to do about it.
 if ($Version -in @('stable', 'latest', '')) {
   Write-Step 'Resolving the current release'
+
+  $apiBase = if ($env:LOCALDROP_API_URL) { $env:LOCALDROP_API_URL } else { 'https://api.github.com' }
+  $headers = @{ 'User-Agent' = 'localdrop-installer' }
+  if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+
+  $resolved = $null
+  $why = @()
+
   try {
-    $Version = (Invoke-RestMethod "$RawBase/VERSION" -TimeoutSec 30).Trim()
+    $release = Invoke-RestMethod "$apiBase/repos/$Repo/releases/latest" -Headers $headers -TimeoutSec 30
+    $resolved = ($release.tag_name -replace '^v', '').Trim()
   } catch {
-    Fail "could not resolve the current version: $($_.Exception.Message)"
+    $why += "releases API ($apiBase): $($_.Exception.Message)"
   }
+
+  if (-not $resolved) {
+    # $RawBase is the repo root; raw.githubusercontent.com needs the ref, so
+    # this is .../LocalDrop/main/VERSION. Omitting "/main" is a silent 404 -
+    # the URL looks right and there is no such file at the root.
+    try {
+      $resolved = (Invoke-RestMethod "$RawBase/main/VERSION" -TimeoutSec 30).Trim()
+    } catch {
+      $why += "VERSION file ($RawBase/main/VERSION): $($_.Exception.Message)"
+    }
+  }
+
+  if ($resolved -notmatch '^\d+\.\d+\.\d+$') {
+    $detail = if ($why) { "`n  tried:`n" + (($why | ForEach-Object { "    - $_" }) -join "`n") } else { '' }
+    Fail "could not resolve the current stable version.$detail`n`n  Look up the newest version at $BaseUrl/releases, then pin it:`n    irm https://raw.githubusercontent.com/$Repo/main/install.ps1 -OutFile install.ps1`n    .\install.ps1 -Version 1.1.0"
+  }
+
+  $Version = $resolved
 }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "unexpected version '$Version'" }
 

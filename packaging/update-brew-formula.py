@@ -44,6 +44,28 @@ def main(argv: list[str] | None = None) -> int:
     if not re.match(r"^\d+\.\d+\.\d+(-[\w.]+)?$", args.version):
         print(f"update-brew-formula: bad version {args.version!r}", file=sys.stderr)
         return 2
+
+    template = FORMULA.read_text(encoding="utf-8")
+    if args.check_only:
+        # A committed formula with placeholders has never been released. This is
+        # the check CI runs, so it must not demand the digests it is about to
+        # discard - otherwise it exits before saying anything useful and the
+        # caller is forced to ignore it.
+        leftovers = sorted(set(re.findall(r"LOCALDROP_[A-Z0-9_]*PLACEHOLDER", template)))
+        if leftovers:
+            print(f"update-brew-formula: {FORMULA.name} still contains {', '.join(leftovers)}",
+                  file=sys.stderr)
+            return 1
+        m = re.search(r'version "([^"]+)"', template)
+        pinned = m.group(1) if m else "?"
+        if pinned != args.version:
+            print(f"update-brew-formula: {FORMULA.name} is pinned at {pinned}, "
+                  f"not {args.version}", file=sys.stderr)
+            return 1
+        print(f"update-brew-formula: {FORMULA.name} is pinned at {pinned}")
+        return 0
+
+    # Digests are only required when actually rewriting the file.
     for name, digest in (("arm64", args.sha256_arm64), ("x64", args.sha256_x64)):
         if not HEX64.match(digest or ""):
             print(
@@ -51,19 +73,6 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-
-    template = FORMULA.read_text(encoding="utf-8")
-    if args.check_only:
-        # A committed formula with placeholders has never been released.
-        leftovers = sorted(set(re.findall(r"LOCALDROP_[A-Z0-9_]*PLACEHOLDER", template)))
-        if leftovers:
-            print(
-                f"update-brew-formula: {FORMULA.name} still contains {', '.join(leftovers)}"
-            )
-        else:
-            m = re.search(r'version "([^"]+)"', template)
-            print(f"update-brew-formula: {FORMULA.name} is pinned at {m.group(1) if m else '?'}")
-        return 0
 
     FORMULA.write_text(
         render(template, args.version, args.sha256_arm64.lower(), args.sha256_x64.lower()),

@@ -63,8 +63,15 @@ def platform_slug() -> str:
         return "macos-arm64" if machine in ("arm64", "aarch64") else "macos-x64"
     if machine in ("aarch64", "arm64"):
         return "linux-arm64"
-    if machine.startswith("armv7"):
-        return "linux-armv7"
+    # 32-bit ARM used to map to a `linux-armv7` slug here. No release has ever
+    # published that artefact and the matrix has no runner for it, so the only
+    # thing the branch did was let a real armv7 build get labelled `linux-x64`
+    # and ship as a broken x64 binary. Refuse instead. releases are x64/arm64.
+    if machine.startswith(("armv5", "armv6", "armv7")) or machine == "arm":
+        sys.exit(
+            f"build-binary: {machine} is 32-bit ARM, which LocalDrop does not "
+            "publish. Build on x64 or arm64, or cross-build via QEMU."
+        )
     return "linux-x64"
 
 
