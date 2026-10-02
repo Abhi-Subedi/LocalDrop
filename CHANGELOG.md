@@ -12,7 +12,47 @@ file is checked against it by `scripts/check_version.py`.
 
 Nothing yet.
 
-## [1.1.1] — 2026-10-02
+## [1.1.2] — 2026-10-02
+
+**Two packaging faults made the released binaries unusable.** Both passed CI,
+passed `localdrop --check`, and were only found by installing the published
+artefact and opening it. 1.1.1 was withdrawn within minutes of publication for
+the first of them.
+
+### Fixed
+
+- **The web UI was never served.** The SPA directory had two resolvers:
+  `launcher._bundled()` used `sys._MEIPASS`, while `main.SPA_DIST` used
+  `Path(__file__).parent / "static"`. PyInstaller points `__file__` at
+  `<bundle>/localdrop/main.py`, so the second looked in
+  `<bundle>/localdrop/static` while the files ship in `<bundle>/static`.
+  `SPA_DIST.exists()` was therefore always False in a frozen build, so the
+  catch-all route and the `/assets` mount were never registered:
+  `GET /api/v1/version` returned 200 and `GET /` returned 404. `if
+  spa.exists()` made it silent. `--check` missed it precisely because it
+  already used the correct resolver. Both callers now share one implementation
+  in `localdrop/paths.py`, and a missing SPA logs an error at startup instead of
+  quietly degrading to 404s.
+- **The Windows archive dropped the whole PyInstaller payload.** The archive walk
+  was gated on `exe.is_dir()`, which is never true because `exe` is a file in
+  both build modes, so `_internal/` was omitted and the binary died with
+  `Failed to load Python DLL .../_internal/python312.dll`. The published zip had
+  3 entries where it should have had 803.
+
+### Added
+
+- Regression tests for both, in the shape that failed: one builds a fake
+  `<bundle>` and asserts `main.SPA_DIST` finds the real `index.html`, the other
+  builds a one-directory payload and asserts the archive contains it. Both were
+  verified to fail against the code that shipped.
+
+## [1.1.1] — 2026-10-02 (withdrawn)
+
+> **Withdrawn shortly after publication.** The Windows archive was missing
+> its PyInstaller payload (#31), and on every platform the binary could not
+> serve the web UI (#32). Use 1.1.2. The fixes below - the installers, the
+> embedded PostgreSQL and Homebrew - are all still in force.
+
 
 **Every install path was broken in the same way, and Windows could not start at
 all.** The one-liner installers advertised in the README resolved the release

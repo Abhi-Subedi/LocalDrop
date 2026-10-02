@@ -15,7 +15,7 @@ from __future__ import annotations
 
 __all__ = ["__version__", "VERSION", "APP_NAME", "APP_SLUG", "APP_ID", "HOMEPAGE", "USER_AGENT"]
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 #: Numeric form, e.g. "1.1.0" -> (1, 1, 0). Kept derived so it can never drift.
 VERSION: tuple[int, ...] = tuple(int(p) for p in __version__.split("."))
