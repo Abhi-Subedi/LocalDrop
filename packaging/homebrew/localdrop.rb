@@ -40,8 +40,14 @@ class Localdrop < Formula
 
   def install
     bin.install "localdrop"
-    pkgshare.install "LICENSE"
-    pkgshare.install "README.md"
+    # AGPL-3.0 requires conveying the licence with the binary, so the tarballs
+    # carry LICENSE (and a README) from 1.1.1 onward. Archives published before
+    # that contain only the executable, and `pkgshare.install` on a missing file
+    # aborts the whole install - so install them when they are there rather than
+    # making an older-release user fail over a packaging nicety.
+    %w[LICENSE README.md].each do |doc|
+      pkgshare.install doc if File.exist?(doc)
+    end
   end
 
   def caveats

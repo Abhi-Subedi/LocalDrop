@@ -156,29 +156,47 @@ def verify_artifact(outdir: Path, version: str) -> Path:
 
 
 def make_zip(exe: Path, outdir: Path, version: str, slug: str) -> Path:
-    """Portable archive: a .zip on Windows, a .tar.gz everywhere else."""
+    """Portable archive: a .zip on Windows, a .tar.gz everywhere else.
+
+    LICENSE and README.md ship inside the archive. AGPL-3.0 requires conveying
+    the licence with the binary, and the Homebrew formula installs both from the
+    extracted tree. Before this they were absent, which made
+    `pkgshare.install "LICENSE"` abort `brew install` outright.
+    """
+    # PyInstaller writes a single self-contained file for --onefile, so the
+    # "root" is its parent directory when it does and None when it does not.
+    root = exe.parent if exe.is_dir() else None
+    docs = [p for p in (REPO_ROOT / "LICENSE", REPO_ROOT / "README.md") if p.is_file()]
+
     if slug.startswith("windows"):
         target = outdir / f"LocalDrop-{version}-{slug}.zip"
         if target.exists():
             target.unlink()
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
-            for p in sorted(exe.parent.rglob("*")):
-                if p.is_file() and "__pycache__" not in p.parts:
-                    z.write(p, Path(exe.parent.name) / p.relative_to(exe.parent))
+            if root is not None:
+                for p in sorted(root.rglob("*")):
+                    if p.is_file() and "__pycache__" not in p.parts:
+                        z.write(p, Path(exe.parent.name) / p.relative_to(exe.parent))
+            else:
+                z.write(exe, Path(exe.parent.name) / exe.name)
+            for p in docs:
+                z.write(p, Path(exe.parent.name) / p.name)
     else:
         import tarfile
 
         target = outdir / f"localdrop-{version}-{slug}.tar.gz"
         if target.exists():
             target.unlink()
-        root = exe.parent if exe.is_dir() else None
+        prefix = f"localdrop-{version}"
         with tarfile.open(target, "w:gz") as t:
             if root is not None:
                 for p in sorted(root.rglob("*")):
                     if p.is_file():
-                        t.add(p, arcname=f"localdrop-{version}/{p.relative_to(root)}")
+                        t.add(p, arcname=f"{prefix}/{p.relative_to(root)}")
             else:
-                t.add(exe, arcname=f"localdrop-{version}/{exe.name}")
+                t.add(exe, arcname=f"{prefix}/{exe.name}")
+            for p in docs:
+                t.add(p, arcname=f"{prefix}/{p.name}")
     print(f"build-binary: archive {target.name} ({target.stat().st_size // 1024} KiB)", flush=True)
     return target
 

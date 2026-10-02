@@ -33,19 +33,66 @@ def render(template: str, version: str, arm: str, x64: str) -> str:
     return out
 
 
+def substitute(text: str, version: str, arm: str, x64: str) -> str:
+    """Rewrite a *released* formula, not just the template's placeholders.
+
+    The template is only rendered on a fresh release. Once a real version has
+    been substituted the placeholders are gone, so a later release has to
+    rewrite the literal values instead. Doing only the first half is why the
+    committed formula stayed stuck on whatever version it first reached.
+    """
+    out = text.replace("LOCALDROP_VERSION_PLACEHOLDER", version)
+    out = out.replace("LOCALDROP_SHA256_ARM64_PLACEHOLDER", arm)
+    out = out.replace("LOCALDROP_SHA256_X64_PLACEHOLDER", x64)
+    out = re.sub(r'(?m)^(\s*version\s+")[^"]*(")', rf'\g<1>{version}\g<2>', out)
+
+    # The two sha256 lines belong to the arm64 branch and the x64 branch, in
+    # that order. This has to be one pass: a second re.sub would match the line
+    # the first one just rewrote and both would end up with the x64 digest.
+    digests = iter((arm, x64))
+
+    def _sha(match: re.Match[str]) -> str:
+        return f'{match.group(1)}{next(digests, x64)}{match.group(2)}'
+
+    out = re.sub(r'(?m)^(\s*sha256\s+")[^"]*(")', _sha, out)
+
+    # The download URLs embed the version twice each, once per architecture.
+    def _url(match: re.Match[str]) -> str:
+        arch = "arm64" if "macos-arm64" in match.group(0) else "x64"
+        return (
+            f'url "https://github.com/Abhi-Subedi/LocalDrop/releases/download/'
+            f'v{version}/localdrop-{version}-macos-{arch}.tar.gz"'
+        )
+
+    out = re.sub(r'(?m)^\s*url "https://github\.com/[^"]*\.tar\.gz"\s*$', _url, out)
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--version", required=True, help="release version, e.g. 1.1.0")
     ap.add_argument("--sha256-arm64", default="", help="sha256 of the macos-arm64 tarball")
     ap.add_argument("--sha256-x64", default="", help="sha256 of the macos-x86_64 tarball")
     ap.add_argument("--check-only", action="store_true", help="validate, do not write")
+    ap.add_argument(
+        "--formula",
+        type=Path,
+        help="formula to operate on (default: the one next to this script). The "
+        "homebrew-localdrop tap passes its own Formula/localdrop.rb so there is "
+        "one substitution implementation instead of two.",
+    )
     args = ap.parse_args(argv)
+
+    formula = args.formula if args.formula else FORMULA
+    if not formula.is_file():
+        print(f"update-brew-formula: {formula} does not exist", file=sys.stderr)
+        return 2
 
     if not re.match(r"^\d+\.\d+\.\d+(-[\w.]+)?$", args.version):
         print(f"update-brew-formula: bad version {args.version!r}", file=sys.stderr)
         return 2
 
-    template = FORMULA.read_text(encoding="utf-8")
+    template = formula.read_text(encoding="utf-8")
     if args.check_only:
         # A committed formula with placeholders has never been released. This is
         # the check CI runs, so it must not demand the digests it is about to
@@ -53,16 +100,16 @@ def main(argv: list[str] | None = None) -> int:
         # caller is forced to ignore it.
         leftovers = sorted(set(re.findall(r"LOCALDROP_[A-Z0-9_]*PLACEHOLDER", template)))
         if leftovers:
-            print(f"update-brew-formula: {FORMULA.name} still contains {', '.join(leftovers)}",
+            print(f"update-brew-formula: {formula.name} still contains {', '.join(leftovers)}",
                   file=sys.stderr)
             return 1
         m = re.search(r'version "([^"]+)"', template)
         pinned = m.group(1) if m else "?"
         if pinned != args.version:
-            print(f"update-brew-formula: {FORMULA.name} is pinned at {pinned}, "
+            print(f"update-brew-formula: {formula.name} is pinned at {pinned}, "
                   f"not {args.version}", file=sys.stderr)
             return 1
-        print(f"update-brew-formula: {FORMULA.name} is pinned at {pinned}")
+        print(f"update-brew-formula: {formula.name} is pinned at {pinned}")
         return 0
 
     # Digests are only required when actually rewriting the file.
@@ -74,11 +121,11 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
 
-    FORMULA.write_text(
-        render(template, args.version, args.sha256_arm64.lower(), args.sha256_x64.lower()),
+    formula.write_text(
+        substitute(template, args.version, args.sha256_arm64.lower(), args.sha256_x64.lower()),
         encoding="utf-8",
     )
-    print(f"update-brew-formula: {FORMULA.name} -> {args.version}")
+    print(f"update-brew-formula: {formula.name} -> {args.version}")
     return 0
 
 
