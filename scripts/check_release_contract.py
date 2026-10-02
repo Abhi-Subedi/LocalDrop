@@ -28,11 +28,13 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# platform -> (arch, slug) as produced by build-binary.py platform_slug()
+# platform -> (arch, slug) as produced by build-binary.py platform_slug().
+# 64-bit only. `linux-armv7` used to be listed here, but no release has ever
+# published it and release.yml has no runner for it, so requiring it just
+# enshrined a platform that could never be installed.
 SLUGS = {
     "linux-x64": "linux/x64",
     "linux-arm64": "linux/arm64",
-    "linux-armv7": "linux/armv7",
     "macos-x64": "macos/x64",
     "macos-arm64": "macos/arm64",
     "windows-x64": "windows/x64",
@@ -77,9 +79,15 @@ def check_shell_installer() -> list[str]:
     if not m:
         problems.append("install.sh has no detect_arch function")
     else:
-        for arch in ("x64", "arm64", "armv7"):
+        for arch in ("x64", "arm64"):
             if f'echo "{arch}"' not in m.group(1):
                 problems.append(f"install.sh detect_arch never returns {arch}")
+        # And it must not name an arch nothing builds: that request 404s.
+        for arch in ("armv7", "armv6"):
+            if f'echo "{arch}"' in m.group(1):
+                problems.append(
+                    f"install.sh detect_arch returns {arch}, which no release builds"
+                )
 
     # And the two must be interpolated into the asset name.
     if not re.search(r'ASSET="localdrop-\$\{VERSION\}-\$\{PLATFORM\}-\$\{ARCH\}\.tar\.gz"', text):
@@ -109,7 +117,7 @@ def check_slugs_are_producible() -> list[str]:
     """Every slug the release matrix builds must be one platform_slug() returns."""
     build = (ROOT / "packaging" / "build-binary.py").read_text(encoding="utf-8")
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-    produced = set(re.findall(r'"((?:linux|macos|windows)-(?:x64|arm64|armv7))"', build))
+    produced = set(re.findall(r'"((?:linux|macos|windows)-(?:x64|arm64))"', build))
     problems: list[str] = []
     for slug in sorted(set(re.findall(r"asset:\s*(\S+)", release))):
         if slug not in produced:

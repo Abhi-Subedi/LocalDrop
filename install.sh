@@ -144,11 +144,13 @@ detect_arch() {
     # Only x64 and arm64 are built. Naming armv7 here produced a request for
     # localdrop-<version>-linux-armv7.tar.gz, which no release has ever
     # published - so it failed later as a download 404 with no explanation.
-    # Fail now, where the message can say what to do instead.
+    # Fail now, where the message can say why. Do not suggest Docker: it has
+    # no 32-bit ARM build either, so that would just move the dead end.
     armv7l|armv6l|armv5tel)
-      die "no LocalDrop build for $MACHINE (32-bit ARM). Releases are x64 and arm64 only.
-  On a 32-bit board, use Docker instead:
-      docker run -p 8080:8080 -v localdrop:/data ghcr.io/abhi-subedi/localdrop:stable"
+      die "no LocalDrop build for $MACHINE. LocalDrop ships 64-bit builds only:
+  x64, and arm64 (aarch64). A 32-bit ARM board is not supported by any
+  install method, Docker included. Build from source on the board if you
+  need one: see docs/DEVELOPMENT.md"
       ;;
     *) die "unsupported CPU architecture: $MACHINE" ;;
   esac
