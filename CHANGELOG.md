@@ -10,6 +10,10 @@ file is checked against it by `scripts/check_version.py`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.1.1] — 2026-10-02
+
 **Every install path was broken in the same way, and Windows could not start at
 all.** The one-liner installers advertised in the README resolved the release
 version from `raw.githubusercontent.com/<owner>/<repo>/VERSION`, which is a URL
