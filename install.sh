@@ -36,6 +36,7 @@ RUN_USER="${LOCALDROP_USER:-localdrop}"
 PORT="${LOCALDROP_PORT:-8080}"
 VERSION="${LOCALDROP_VERSION:-stable}"     # stable | latest | 1.1.0
 BASE_URL="${LOCALDROP_BASE_URL:-https://raw.githubusercontent.com/$REPO}"
+API_URL="${LOCALDROP_API_URL:-https://api.github.com}"
 SERVICE_NAME="localdrop"
 # macOS launchd needs a concrete uid; resolve it after we know the user exists.
 LAUNCHD_PLIST="/Library/LaunchDaemons/io.github.abhisubedi.localdrop.plist"
@@ -69,7 +70,9 @@ Usage:  sh install.sh [options]
   -h, --help        This text
 
 Environment equivalents: LOCALDROP_VERSION, LOCALDROP_PORT, LOCALDROP_DATA_DIR,
-LOCALDROP_USER, LOCALDROP_INSTALL_DIR, LOCALDROP_BASE_URL, LOCALDROP_CONFIG_DIR.
+LOCALDROP_USER, LOCALDROP_INSTALL_DIR, LOCALDROP_BASE_URL, LOCALDROP_API_URL,
+LOCALDROP_CONFIG_DIR. Export GITHUB_TOKEN to raise the GitHub API rate limit
+used when resolving "stable".
 EOF
 }
 
@@ -138,7 +141,15 @@ detect_arch() {
   case "$MACHINE" in
     x86_64|amd64)  echo "x64" ;;
     aarch64|arm64) echo "arm64" ;;
-    armv7l)        echo "armv7" ;;
+    # Only x64 and arm64 are built. Naming armv7 here produced a request for
+    # localdrop-<version>-linux-armv7.tar.gz, which no release has ever
+    # published - so it failed later as a download 404 with no explanation.
+    # Fail now, where the message can say what to do instead.
+    armv7l|armv6l|armv5tel)
+      die "no LocalDrop build for $MACHINE (32-bit ARM). Releases are x64 and arm64 only.
+  On a 32-bit board, use Docker instead:
+      docker run -p 8080:8080 -v localdrop:/data ghcr.io/abhi-subedi/localdrop:stable"
+      ;;
     *) die "unsupported CPU architecture: $MACHINE" ;;
   esac
 }
@@ -155,7 +166,24 @@ fetch() {
 # Download to stdout; used for the checksum file and the service templates.
 fetch_stdout() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 3 --retry-delay 2 "$1"
+    curl -fsSL --retry 3 --retry-delay 2 -o - "$1"
+  else
+    wget -q -O - "$1"
+  fi
+}
+
+# Same, for api.github.com. Sending the token when one is exported is what
+# lifts the 60-requests-per-hour unauthenticated limit; without it a busy NAT
+# or a CI runner starts seeing 403s here.
+fetch_api_stdout() {
+  if command -v curl >/dev/null 2>&1; then
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+      curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $GITHUB_TOKEN" -o - "$1"
+    else
+      curl -fsSL --retry 3 --retry-delay 2 -o - "$1"
+    fi
+  elif [ -n "${GITHUB_TOKEN:-}" ]; then
+    wget -q -O - --header="Authorization: Bearer $GITHUB_TOKEN" "$1"
   else
     wget -q -O - "$1"
   fi
@@ -194,10 +222,44 @@ RELEASE_BASE="https://github.com/$REPO/releases/download/v${VERSION}"
 # The rolling aliases have no checksum of their own; pin to a real tag so the
 # download is always verifiable. "stable" points at the newest release tag.
 if [ "$VERSION" = "stable" ]; then
-  RESOLVED="$(fetch_stdout "$BASE_URL/VERSION" 2>/dev/null || true)"
-  [ -n "${RESOLVED:-}" ] || die "could not resolve the current stable version"
+  # Two sources, tried in order:
+  #
+  #   1. The releases API. "latest" there is by definition a published,
+  #      non-prerelease release, so it can never name a version whose assets
+  #      do not exist. That correctness is the whole reason it goes first.
+  #   2. The VERSION file on main. Kept as a fallback because networks are
+  #      uneven: some reach raw.githubusercontent.com and not api.github.com,
+  #      some the reverse. Depending on a single host made every install
+  #      hostage to that host.
+  #
+  # The old behaviour read only the VERSION file, so a 404 from
+  # raw.githubusercontent.com aborted with a bare "404" and no clue which host
+  # had failed or what to do about it.
+  RESOLVED="$(fetch_api_stdout "$API_URL/repos/$REPO/releases/latest" 2>/dev/null || true)"
+  RESOLVED="$(printf '%s' "$RESOLVED" | tr ',' '\n' \
+    | sed -n 's/.*"tag_name"[ ]*:[ ]*"v\{0,1\}\([^"/]*\)".*/\1/p' | head -n1 || true)"
+  # $BASE_URL is the repo root; raw.githubusercontent.com needs the ref, so this
+  # is .../LocalDrop/main/VERSION. Omitting "/main" is a silent 404 - the URL
+  # looks right and there is no such file at the root.
+  [ -n "$RESOLVED" ] || RESOLVED="$(fetch_stdout "$BASE_URL/main/VERSION" 2>/dev/null || true)"
   RESOLVED="$(printf '%s' "$RESOLVED" | tr -d ' \t\r\n[:space:]')"
-  VERSION="$RESOLVED"
+
+  case "$RESOLVED" in
+    [0-9]*.[0-9]*.[0-9]*)
+      VERSION="$RESOLVED"
+      ;;
+    *)
+      die "could not resolve the current stable version.
+  tried: $API_URL/repos/$REPO/releases/latest
+         $BASE_URL/main/VERSION
+  If a proxy or firewall is blocking one of those hosts, the other should have
+  worked - check for a stale DNS cache and retry.
+
+  Otherwise, find the newest version and pin it explicitly:
+         curl -fsSLO https://raw.githubusercontent.com/$REPO/main/install.sh
+         sh install.sh --version 1.1.0"
+      ;;
+  esac
   ASSET="localdrop-${VERSION}-${PLATFORM}-${ARCH}.tar.gz"
   RELEASE_BASE="https://github.com/$REPO/releases/download/v${VERSION}"
 fi
