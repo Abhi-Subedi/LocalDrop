@@ -162,7 +162,49 @@ def make_zip(exe: Path, outdir: Path, version: str, slug: str) -> Path:
     the licence with the binary, and the Homebrew formula installs both from the
     extracted tree. Before this they were absent, which made
     `pkgshare.install "LICENSE"` abort `brew install` outright.
+
+    `exe` is the path to the built executable, which is a *file* in both build
+    modes. The payload directory beside it is therefore always `exe.parent`:
+
+      * onedir  - the real payload lives there and MUST be included. A Windows
+                  build is onedir, so omitting it ships a zip containing only
+                  `localdrop.exe`, which then fails at startup with
+                  "Failed to load Python DLL .../_internal/python312.dll".
+      * onefile - the parent holds nothing but the single executable, so
+                  walking it is a no-op.
+
+    Do not gate this on `exe.is_dir()`. It is never true here, and doing so is
+    exactly how 1.1.1 shipped a 12 MiB zip with 3 entries instead of 801.
     """
+    payload = exe.parent
+    docs = [p for p in (REPO_ROOT / "LICENSE", REPO_ROOT / "README.md") if p.is_file()]
+    prefix_dir = Path(payload.name)
+
+    if slug.startswith("windows"):
+        target = outdir / f"LocalDrop-{version}-{slug}.zip"
+        if target.exists():
+            target.unlink()
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
+            for p in sorted(payload.rglob("*")):
+                if p.is_file() and "__pycache__" not in p.parts:
+                    z.write(p, prefix_dir / p.relative_to(payload))
+            for p in docs:
+                z.write(p, prefix_dir / p.name)
+    else:
+        import tarfile
+
+        target = outdir / f"localdrop-{version}-{slug}.tar.gz"
+        if target.exists():
+            target.unlink()
+        prefix = f"localdrop-{version}"
+        with tarfile.open(target, "w:gz") as t:
+            for p in sorted(payload.rglob("*")):
+                if p.is_file():
+                    t.add(p, arcname=f"{prefix}/{p.relative_to(payload)}")
+            for p in docs:
+                t.add(p, arcname=f"{prefix}/{p.name}")
+    print(f"build-binary: archive {target.name} ({target.stat().st_size // 1024} KiB)", flush=True)
+    return target
     # PyInstaller writes a single self-contained file for --onefile, so the
     # "root" is its parent directory when it does and None when it does not.
     root = exe.parent if exe.is_dir() else None
