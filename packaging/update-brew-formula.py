@@ -57,14 +57,23 @@ def substitute(text: str, version: str, arm: str, x64: str) -> str:
     out = re.sub(r'(?m)^(\s*sha256\s+")[^"]*(")', _sha, out)
 
     # The download URLs embed the version twice each, once per architecture.
+    # The leading whitespace must be captured and re-emitted: matching with
+    # `^\s*` and returning a bare `url ...` silently de-indents the line, which
+    # is harmless to Ruby but rewrites the file on every release and breaks
+    # anything that matches on indentation.
     def _url(match: re.Match[str]) -> str:
+        indent = match.group(1)
         arch = "arm64" if "macos-arm64" in match.group(0) else "x64"
         return (
-            f'url "https://github.com/Abhi-Subedi/LocalDrop/releases/download/'
-            f'v{version}/localdrop-{version}-macos-{arch}.tar.gz"'
+            f'{indent}url "https://github.com/Abhi-Subedi/LocalDrop/releases/'
+            f'download/v{version}/localdrop-{version}-macos-{arch}.tar.gz"'
         )
 
-    out = re.sub(r'(?m)^\s*url "https://github\.com/[^"]*\.tar\.gz"\s*$', _url, out)
+    out = re.sub(
+        r'(?m)^([ \t]*)url "https://github\.com/[^"]*\.tar\.gz"[ \t]*$',
+        _url,
+        out,
+    )
     return out
 
 
