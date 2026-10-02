@@ -10,7 +10,68 @@ file is checked against it by `scripts/check_version.py`.
 
 ## [Unreleased]
 
-Nothing yet.
+**Every install path was broken in the same way, and Windows could not start at
+all.** The one-liner installers advertised in the README resolved the release
+version from `raw.githubusercontent.com/<owner>/<repo>/VERSION`, which is a URL
+that cannot exist — the CDN needs a ref in the path. So `irm ... | iex` and
+`curl ... | sh` failed for every user on the default path, on every platform,
+and only worked if you happened to pass an explicit version. Fixing that
+surfaced four more defects behind it, including one that made a completed
+Windows install unable to start.
+
+### Fixed
+
+- **Both native installers failed to resolve a version** (`install.ps1`,
+  `install.sh`). The URL was missing the `/main` ref, so it 404'd and the
+  default `stable` path never worked. Resolution now reads the releases API
+  first — where `latest` cannot name a version whose assets are missing — and
+  falls back to `VERSION` on `main`, because depending on a single host is the
+  underlying problem. `GITHUB_TOKEN` is honoured to lift the 60/hour API limit.
+  A failure now names both URLs tried and how to pin a version, instead of a
+  bare `404`.
+- **A native Windows install completed and then could not start.** The embedded
+  PostgreSQL was unpacked with `filter="tar"`, which reproduces the archive's
+  `0o700` directory modes; on Windows that produces a *protected* DACL granting
+  only `OWNER RIGHTS`, `SYSTEM` and `Administrators`, excluding the installing
+  user. 73 of 76 extracted directories were affected, so `initdb` failed with
+  `could not access file ".../pg/share/postgres.bki": Permission denied`.
+  `localdrop --check` passed because it never touches the database. Now uses
+  `filter="data"`, which is also the safer filter.
+- **`brew install` could not have worked.** The advertised tap did not exist,
+  and the formula did `pkgshare.install "LICENSE"` / `"README.md"` for files
+  the tarballs never contained, which aborts the install. The tap is published
+  at [`Abhi-Subedi/homebrew-localdrop`](https://github.com/Abhi-Subedi/homebrew-localdrop)
+  and keeps itself current daily.
+- **`linux-armv7` was accepted but has never been built.** `install.sh` requested
+  an artefact no release publishes, so 32-bit ARM boards failed later with an
+  unexplained download `404`. `build-binary.py` was worse: it fell through to
+  labelling an armv7 build as `linux-x64`. LocalDrop ships 64-bit only.
+- **`update-brew-formula.py --check-only` could never succeed.** It validated
+  `--sha256-*` and then discarded them, so it always exited 2 before checking
+  anything, which is why the placeholder check was wrapped in `|| true` and
+  never fired.
+- **The Homebrew formula could not be re-versioned.** `render()` only replaced
+  placeholders, which are gone after the first release, so the formula stayed
+  pinned to whatever version it first reached.
+
+### Security
+
+- The SPA catch-all route joins the request path onto the SPA directory, which
+  is not safe on its own: on pathlib `base / "/abs"` discards `base` entirely,
+  and a bare absolute path resolves to a real file outside the SPA. The
+  `is_relative_to` guard is correct and is now pinned by a test that fails when
+  the guard is removed. The three CodeQL `py/path-injection` alerts on this
+  function are answered by that test rather than dismissed on inspection.
+
+### Added
+
+- LICENSE and README.md ship inside the release archives. AGPL-3.0 requires
+  conveying the licence with the binary, so this closes a compliance gap as well
+  as a packaging one.
+- `GOVERNANCE.md`, stating the project's scope and decision-making plainly.
+- A pinned roadmap issue listing what still needs building, and what will not.
+- Discussions, with a "start here" post.
+- CodeQL analysis for Python, JavaScript/TypeScript, Ruby and Actions.
 
 ## [1.1.0] — 2026-10-01
 
