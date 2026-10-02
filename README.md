@@ -1,4 +1,13 @@
-# LocalDrop
+<div align="center">
+  <img src="docs/logo.png" alt="LocalDrop" width="380">
+  <h3>Move a file to another device. Nothing else.</h3>
+  <p>
+    <a href="https://github.com/Abhi-Subedi/LocalDrop/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Abhi-Subedi/LocalDrop/actions/workflows/ci.yml/badge.svg"></a>
+    <a href="https://github.com/Abhi-Subedi/LocalDrop/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Abhi-Subedi/LocalDrop?label=release&color=22c55e"></a>
+    <a href="https://github.com/Abhi-Subedi/LocalDrop/pkgs/container/localdrop"><img alt="GHCR" src="https://img.shields.io/badge/docker-ghcr.io%2Flocaldrop-22c55e?logo=docker&logoColor=white"></a>
+    <a href="LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg"></a>
+  </p>
+</div>
 
 **Self-hosted, local-network-first file sharing. Fast, private, and yours.**
 
@@ -18,19 +27,51 @@ no vendor lock-in — one server on your network holds your files.
 
 ## Try it
 
-**There is a live demo.** Open the URL, and you get your own throwaway account
-with an empty file tree — no setup, no password, no configuration. Upload
-something, share it, download it back.
+You get a throwaway account with an empty file tree — no setup, no password, no
+configuration. Upload something, share it, download it back. Everything you
+upload is deleted after an hour, and the whole instance is torn down when the
+workflow ends. It is a demonstration, not a service.
 
-Everything you upload is deleted after an hour, and the whole instance is torn
-down when the workflow ends. It is a demonstration, not a service: see
-[docs/DEMO.md](docs/DEMO.md).
-
-To start one yourself:
+There is no permanent demo URL on purpose: a tunnel that dies every few hours
+teaches people not to trust the link. Spin up your own in about a minute:
 
 ```bash
 gh workflow run demo.yml
 ```
+
+Then open the run, click the job, and read the **Summary** panel at the bottom —
+that is where the URL lives. Click the QR code with your phone on the same
+network and the transfer is already waiting for you. See
+[docs/DEMO.md](docs/DEMO.md) for what demo mode does and does not allow.
+
+Prefer to skip the demo and just install it? Jump to [Install](#install) — Docker
+is the shortest path, and a native binary needs no database and no container
+runtime.
+
+## Who it's for
+
+If you have ever run one of these, LocalDrop is the smaller answer:
+
+| | LocalDrop | Nextcloud | Syncthing | FileBrowser |
+|---|---|---|---|---|
+| Runs on a spare box or NAS | ✅ one binary | ⚠️ a stack of services | ✅ | ✅ |
+| Outbound internet after install | ❌ never | ⚠️ for some features | ❌ | ❌ |
+| Handoff to a phone | ✅ QR + link | ✅ link | ⚠️ Receive Mode | ✅ link |
+| Share link with expiry / password / limit | ✅ built in | ⚠️ config or plugin | ❌ | ⚠️ basic |
+| Resumable multi-gigabyte upload | ✅ tus | ✅ | n/a — syncs continuously | ⚠️ |
+| Browsable file manager UI | ✅ | ✅ | ❌ no UI | ✅ |
+| Owns the bytes, no third party | ✅ | ✅ | ✅ | ✅ |
+| Accounts, groups, chat, calendar | ❌ one owner | ✅ | ❌ | ⚠️ |
+
+Two rows are worth reading twice. Syncthing's Receive Mode is a genuine QR
+handoff and it does it well — what it will not do is give you a share *link* that
+expires, or a browser file manager, or one HTTP endpoint you can curl.
+Nextcloud does all of this and much more, and asks you to keep a database, a
+cache, and a job runner patched alongside the app itself.
+
+LocalDrop does not try to be either. It is the case where you want to move a
+file to another device on your own network, and you would rather not maintain a
+PHP stack to do it.
 
 ## Install
 
@@ -148,6 +189,7 @@ single-range resume support. Details: [API.md](docs/API.md).
 | [API.md](docs/API.md) | REST v1 reference (auth, files, tus uploads, shares) |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local dev setup, tests, release process |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [GOVERNANCE.md](GOVERNANCE.md) | Who decides what, and what the project will not become |
 
 Engineering history — the full specification, the ADRs, and the implementation
 plan — lives in [`docs/spec/`](docs/spec/) and [`docs/adr/`](docs/adr/).
@@ -172,6 +214,10 @@ Must-have requirements that have no automated test and why.
 Bug reports, tests and documentation are all welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md). A PR with a test that fails without the fix
 is worth more than one without.
+
+[GOVERNANCE.md](GOVERNANCE.md) is short and worth two minutes: this is a
+one-maintainer project, and it stays deliberately small. If you are about to
+build a large feature, read that first.
 
 Security problems go through private reporting, not public issues:
 [SECURITY.md](SECURITY.md).
