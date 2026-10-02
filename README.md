@@ -215,6 +215,13 @@ Bug reports, tests and documentation are all welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md). A PR with a test that fails without the fix
 is worth more than one without.
 
+Asking "how do I…?" or "is this supposed to work like this?" belongs in
+[Discussions](https://github.com/Abhi-Subedi/LocalDrop/discussions), not in an
+issue — you will get an answer faster, and the answer stays searchable for the
+next person. Feature ideas go in the same place; the
+[pinned roadmap](https://github.com/Abhi-Subedi/LocalDrop/issues/20) says which
+ones are planned and which are never going to happen.
+
 [GOVERNANCE.md](GOVERNANCE.md) is short and worth two minutes: this is a
 one-maintainer project, and it stays deliberately small. If you are about to
 build a large feature, read that first.
