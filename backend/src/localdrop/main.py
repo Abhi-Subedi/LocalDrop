@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import pathlib
 import socket
 import sys
 import uuid as uuid_mod
@@ -26,12 +25,20 @@ from .__about__ import __version__
 from .config import Settings, get_settings
 from .db import dispose_engine, init_engine  # noqa: F401 (init used below)
 from .logging import bind_request_id, get_logger, setup_logging
+from .paths import spa_dist
 from .storage import Storage, set_storage
 
 log = get_logger(__name__)
 
-APP_DIR = pathlib.Path(__file__).resolve().parent
-SPA_DIST = APP_DIR / "static"  # src/localdrop/static (built SPA, shipped in the wheel)
+# The built SPA. Resolved through paths.spa_dist() rather than
+# `Path(__file__).parent / "static"`: inside a PyInstaller bundle __file__ is
+# <bundle>/localdrop/main.py, so that expression pointed at
+# <bundle>/localdrop/static while the files ship at <bundle>/static. The result
+# was SPA_DIST.exists() == False in every published binary, so the catch-all
+# route was never registered and GET / returned 404 - the API worked and the
+# web UI did not. `localdrop --check` missed it because it already used the
+# correct resolver; there is now only one.
+SPA_DIST = spa_dist()
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -285,7 +292,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # SPA serving (BC-9): /api/* and /metrics untouched; everything else → SPA
     spa = SPA_DIST
-    if spa.exists():
+    if not (spa / "index.html").is_file():
+        # Previously this was `if spa.exists()`, and a wrong path therefore
+        # degraded silently: no catch-all, no /assets mount, and every
+        # non-API URL a bare 404 while the API worked fine. A packaging mistake
+        # should be loud at startup, not invisible until someone opens the page.
+        log.error(
+            "the web UI is missing from this build: expected %s. "
+            "This is a packaging fault, not a configuration one - the API will "
+            "run but the browser interface will 404.",
+            spa / "index.html",
+        )
+    else:
         assets = spa / "assets"
         if assets.exists():
             app.mount("/assets", StaticFiles(directory=assets), name="assets")

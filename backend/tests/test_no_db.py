@@ -352,6 +352,67 @@ def test_spa_fallback_refuses_to_serve_files_outside_the_spa(tmp_path, monkeypat
         get_settings.cache_clear()
 
 
+def test_spa_path_matches_the_self_check_resolver_in_a_frozen_build(tmp_path, monkeypatch):
+    """The SPA path and `--check`'s resolver must agree inside a bundle.
+
+    They used to be two implementations. `launcher._bundled()` resolved frozen
+    resources as `sys._MEIPASS / rel`, while `main.SPA_DIST` was
+    `Path(__file__).parent / "static"`. PyInstaller sets `__file__` for a
+    bundled module to `<bundle>/localdrop/main.py`, so the second pointed at
+    `<bundle>/localdrop/static` while the files ship at `<bundle>/static`:
+    `SPA_DIST.exists()` was False in every published binary, the catch-all was
+    never registered, and `GET /` returned 404 while the API worked.
+
+    `--check` passed throughout because it already used the right resolver.
+    Simulate the frozen layout and assert both now land on the same file, so
+    this cannot diverge again.
+    """
+    import sys
+
+    import localdrop.paths as paths
+
+    bundle = tmp_path / "_internal"
+    (bundle / "static").mkdir(parents=True)
+    (bundle / "static" / "index.html").write_text("<div id='root'></div>", encoding="utf-8")
+    # The directory a naive `Path(__file__).parent / "static"` would look in.
+    (bundle / "localdrop").mkdir()
+    (bundle / "localdrop" / "static").mkdir()
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+
+    assert paths.is_frozen() is True
+    assert paths.bundle_root() == bundle
+    assert paths.resource("static") == bundle / "static"
+
+    # main.SPA_DIST is computed at import time, so the module has to be
+    # re-imported under the simulated bundle. This is the invariant that
+    # actually broke: main.py resolved the SPA itself.
+    import importlib
+
+    import localdrop.main as main_mod
+
+    reloaded = importlib.reload(main_mod)
+    try:
+        assert reloaded.SPA_DIST == bundle / "static", (
+            f"main.SPA_DIST is {reloaded.SPA_DIST}, expected {bundle / 'static'}"
+        )
+        assert reloaded.SPA_DIST != bundle / "localdrop" / "static", (
+            "main.SPA_DIST still resolves through the module directory, which is "
+            "wrong in a frozen build"
+        )
+        assert (reloaded.SPA_DIST / "index.html").is_file()
+    finally:
+        # Put the module back in its unfrozen state for the rest of the session.
+        monkeypatch.undo()
+        importlib.reload(main_mod)
+
+    # launcher._bundled must be the same function, not a parallel copy.
+    import localdrop.launcher as launcher
+
+    assert launcher._bundled("static") == paths.spa_dist()
+
+
 def test_every_documented_setting_exists():
     """Every setting the docs promise must be a real Settings field.
 
