@@ -27,11 +27,10 @@ import webbrowser
 from pathlib import Path
 
 from .__about__ import __version__
-
-#: Frozen builds ship read-only data next to the executable inside _MEIPASS.
-#: Installed builds (wheel/venv) have it inside the package directory. Both are
-#: the same place now, so this is just a dev-convenience fallback.
-_PACKAGE_DIR = Path(__file__).resolve().parent
+from .paths import PACKAGE_DIR as _PACKAGE_DIR
+from .paths import bundle_root as _bundle_root
+from .paths import is_frozen as _is_frozen
+from .paths import resource as _bundled
 
 
 def _default_data_dir() -> Path:
@@ -49,13 +48,6 @@ def _default_data_dir() -> Path:
         return Path.home() / "Library" / "Application Support" / "LocalDrop"
     base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return base / "localdrop"
-
-
-def _bundled(rel: str) -> Path:
-    """Locate read-only resources (static/, migrations/) in dev and frozen builds."""
-    if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS", ".")) / rel
-    return _PACKAGE_DIR / rel
 
 
 def _ensure_secret(data_dir: Path) -> str:
@@ -143,8 +135,8 @@ def _self_check() -> int:
     import importlib
 
     problems: list[str] = []
-    frozen = bool(getattr(sys, "frozen", False))
-    bundle = str(Path(getattr(sys, "_MEIPASS", "."))) if frozen else str(_PACKAGE_DIR)
+    frozen = _is_frozen()
+    bundle = str(_bundle_root()) if frozen else str(_PACKAGE_DIR)
 
     print(f"  LocalDrop {__version__}  (python {sys.version.split()[0]}, {sys.platform})")
     print(f"  frozen={frozen}  bundle={bundle}")
