@@ -330,7 +330,7 @@ def test_spa_fallback_refuses_to_serve_files_outside_the_spa(tmp_path, monkeypat
     fwd = str(canary).replace("\\", "/")
 
     probes = [
-        fwd,                       # bare absolute path - the working exploit
+        fwd,  # bare absolute path - the working exploit
         "/" + fwd.lstrip("/"),
         fwd.lstrip("/"),
         "../" + canary.name,
