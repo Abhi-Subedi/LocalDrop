@@ -103,7 +103,20 @@ class EmbeddedPostgres:
         with zipfile.ZipFile(jar) as z:
             txz = next(n for n in z.namelist() if n.endswith(".txz"))
             with z.open(txz) as stream, tarfile.open(fileobj=stream, mode="r|xz") as t:
-                t.extractall(self.root, filter="tar")
+                # `data`, not `tar`. The `tar` filter reproduces the archive's
+                # POSIX modes, and this archive marks its directories 0o700.
+                # On Windows that does not mean "owner only" the way it does on
+                # POSIX - it produces a protected DACL granting just
+                # OWNER RIGHTS, SYSTEM and Administrators, which excludes the
+                # user doing the install. Measured on Windows: 73 of 76
+                # extracted directories ended up protected and initdb then
+                # failed with
+                #   could not access file ".../pg/share/postgres.bki":
+                #   Permission denied
+                # so a native install could not start at all. `data` also
+                # refuses absolute paths, traversal and outward-pointing links,
+                # so it is the safer filter as well as the working one.
+                t.extractall(self.root, filter="data")
         if not self._exe("pg_ctl").exists():
             raise RuntimeError("embedded PostgreSQL archive did not contain bin/pg_ctl")
 

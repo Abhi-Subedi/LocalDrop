@@ -13,6 +13,7 @@ exactly when an operator is trying to diagnose something.
 from __future__ import annotations
 
 import asyncio
+import re
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -251,6 +252,39 @@ def test_packaged_resources_exist_outside_a_frozen_build():
     assert (md / "env.py").is_file(), f"no alembic env.py at {md}"
     assert (md / "script.py.mako").is_file(), f"no alembic template at {md}"
     assert list((md / "versions").glob("*.py")), f"no migration revisions in {md}"
+
+
+def test_embedded_postgres_extraction_uses_the_data_filter():
+    """The embedded PostgreSQL must be unpacked with the `data` filter.
+
+    Regression guard. `filter="tar"` reproduces the archive's POSIX modes, and
+    that archive marks its directories 0o700. On Windows that does not mean
+    "owner only" as it does on POSIX: it yields a *protected* DACL granting
+    only OWNER RIGHTS, SYSTEM and Administrators, which excludes the account
+    doing the install. Measured on Windows, 73 of 76 extracted directories came
+    out protected and `initdb` then failed with
+
+        could not access file ".../pg/share/postgres.bki": Permission denied
+
+    so a native Windows install completed and then could not start at all.
+    `--check` did not catch it because it never touches the database.
+
+    Asserting the filter keeps this from being reintroduced, which matters
+    because `tar` and `data` both work on Linux and only Windows shows the
+    difference.
+    """
+    import inspect
+
+    from localdrop import embedded_pg
+
+    src = inspect.getsource(embedded_pg)
+    used = re.findall(r'extractall\([^)]*filter\s*=\s*"([^"]+)"', src)
+    assert used, "embedded_pg no longer extracts with an explicit filter"
+    for name in used:
+        assert name == "data", (
+            f"embedded_pg extracts with filter={name!r}; it must be 'data' - "
+            "the 'tar' filter makes the embedded cluster unreadable on Windows"
+        )
 
 
 def test_every_documented_setting_exists():
