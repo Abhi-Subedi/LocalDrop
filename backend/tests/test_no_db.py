@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -285,6 +286,70 @@ def test_embedded_postgres_extraction_uses_the_data_filter():
             f"embedded_pg extracts with filter={name!r}; it must be 'data' - "
             "the 'tar' filter makes the embedded cluster unreadable on Windows"
         )
+
+
+def test_spa_fallback_refuses_to_serve_files_outside_the_spa(tmp_path, monkeypatch):
+    """BC-9: the catch-all route must not become a file-read primitive.
+
+    Everything that is not /api or /metrics falls through to
+    `spa_fallback(full_path)`, which joins the request path onto SPA_DIST. That
+    join is the dangerous operation: on pathlib `base / "/abs"` discards `base`
+    entirely, and `../` walks out of the tree. A bare `C:/...` path resolves to
+    a real file outside the SPA, verified on Windows.
+
+    The guard is `candidate.is_relative_to(spa.resolve())`. This asserts it holds
+    instead of assuming it, because CodeQL reports three `py/path-injection`
+    alerts on this function and the answer should be "guarded, with a test that
+    fails when the guard is removed" rather than "probably fine".
+
+    The handler is called directly. Over HTTP the client normalises `..` away
+    before it reaches the router, so an HTTP-level test passes whether or not
+    the guard exists - which is exactly the trap this had to avoid.
+    """
+    import tempfile
+
+    monkeypatch.setenv("LOCALDROP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LOCALDROP_SECRET_KEY", "x" * 40)
+    monkeypatch.setenv("LOCALDROP_DATABASE_URL", DEAD_DB)
+    monkeypatch.setenv("LOCALDROP_DEV_MODE", "true")
+
+    from localdrop.config import get_settings
+    from localdrop.main import SPA_DIST, create_app
+
+    get_settings.cache_clear()
+    app = create_app()
+    spa = SPA_DIST.resolve()
+
+    catch_all = [r for r in app.routes if getattr(r, "path", "") == "/{full_path:path}"]
+    assert len(catch_all) == 1, f"expected one catch-all route, found {len(catch_all)}"
+    handler = catch_all[0].endpoint
+
+    # A real, readable file well outside the SPA.
+    canary = Path(tempfile.gettempdir()) / "localdrop-traversal-canary.txt"
+    canary.write_text("CANARY-LEAKED", encoding="utf-8")
+    fwd = str(canary).replace("\\", "/")
+
+    probes = [
+        fwd,                       # bare absolute path - the working exploit
+        "/" + fwd.lstrip("/"),
+        fwd.lstrip("/"),
+        "../" + canary.name,
+        "../../../../../../../../" + fwd.lstrip("/"),
+        "/../../etc/hosts",
+    ]
+    try:
+        for probe in probes:
+            resp = asyncio.run(handler(probe))
+            served = getattr(resp, "path", None)
+            assert served is not None, f"{probe!r} got a non-file response"
+            resolved = Path(served).resolve()
+            assert resolved.is_relative_to(spa), (
+                f"spa_fallback served {resolved}, which is outside {spa} "
+                f"(probe {probe!r}) - the is_relative_to guard is not working"
+            )
+    finally:
+        canary.unlink(missing_ok=True)
+        get_settings.cache_clear()
 
 
 def test_every_documented_setting_exists():
