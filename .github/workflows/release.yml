@@ -373,6 +373,16 @@ jobs:
           fi
           echo "all six artefacts present"
 
+      # Two published releases were broken in ways no existing step noticed,
+      # because every gate checked artefact *names* and none checked contents:
+      # 1.1.1's Windows zip had 3 entries instead of 803 (no PyInstaller
+      # payload), and 1.1.2's tarballs shipped PyInstaller's build/ scratch
+      # tree. Both were downloadable, both passed CI, both reached users.
+      - name: Every archive must carry what its consumers unpack
+        run: |
+          set -euo pipefail
+          python scripts/check_archive_contents.py dist/release
+
       - name: SHA256SUMS
         run: |
           cd dist/release

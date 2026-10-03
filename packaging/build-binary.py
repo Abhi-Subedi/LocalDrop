@@ -158,38 +158,40 @@ def verify_artifact(outdir: Path, version: str) -> Path:
 def make_zip(exe: Path, outdir: Path, version: str, slug: str) -> Path:
     """Portable archive: a .zip on Windows, a .tar.gz everywhere else.
 
-    LICENSE and README.md ship inside the archive. AGPL-3.0 requires conveying
+    LICENSE and README.md ship inside every archive. AGPL-3.0 requires conveying
     the licence with the binary, and the Homebrew formula installs both from the
     extracted tree. Before this they were absent, which made
     `pkgshare.install "LICENSE"` abort `brew install` outright.
 
-    `exe` is the path to the built executable, which is a *file* in both build
-    modes. The payload directory beside it is therefore always `exe.parent`:
+    The two archive shapes are deliberately asymmetric, because the builds are:
 
-      * onedir  - the real payload lives there and MUST be included. A Windows
-                  build is onedir, so omitting it ships a zip containing only
-                  `localdrop.exe`, which then fails at startup with
-                  "Failed to load Python DLL .../_internal/python312.dll".
-      * onefile - the parent holds nothing but the single executable, so
-                  walking it is a no-op.
+    * **Windows is a one-directory build.** The executable needs its
+      ``_internal/`` payload beside it, so the whole directory is packed. Get
+      this wrong and the binary dies at startup with
+      ``Failed to load Python DLL .../_internal/python312.dll`` - which is how
+      1.1.1 shipped a zip with 3 entries instead of 803.
+    * **Linux and macOS are one-file builds.** The executable is
+      self-contained, and its directory is the *output* directory: it also holds
+      PyInstaller's ``build/`` scratch tree and, on macOS, the ``.app`` bundle.
+      Packing the directory therefore shipped ``PYZ-00.pyz``, ``*.toc``,
+      ``base_library.zip`` and a source cross-reference to users. Pack the
+      single executable only.
 
-    Do not gate this on `exe.is_dir()`. It is never true here, and doing so is
-    exactly how 1.1.1 shipped a 12 MiB zip with 3 entries instead of 801.
+    So: walk the directory for the zip, take one file for the tarball.
     """
-    payload = exe.parent
     docs = [p for p in (REPO_ROOT / "LICENSE", REPO_ROOT / "README.md") if p.is_file()]
-    prefix_dir = Path(payload.name)
 
     if slug.startswith("windows"):
+        payload = exe.parent
         target = outdir / f"LocalDrop-{version}-{slug}.zip"
         if target.exists():
             target.unlink()
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
             for p in sorted(payload.rglob("*")):
                 if p.is_file() and "__pycache__" not in p.parts:
-                    z.write(p, prefix_dir / p.relative_to(payload))
+                    z.write(p, Path(payload.name) / p.relative_to(payload))
             for p in docs:
-                z.write(p, prefix_dir / p.name)
+                z.write(p, Path(payload.name) / p.name)
     else:
         import tarfile
 
@@ -198,9 +200,7 @@ def make_zip(exe: Path, outdir: Path, version: str, slug: str) -> Path:
             target.unlink()
         prefix = f"localdrop-{version}"
         with tarfile.open(target, "w:gz") as t:
-            for p in sorted(payload.rglob("*")):
-                if p.is_file():
-                    t.add(p, arcname=f"{prefix}/{p.relative_to(payload)}")
+            t.add(exe, arcname=f"{prefix}/{exe.name}")
             for p in docs:
                 t.add(p, arcname=f"{prefix}/{p.name}")
     print(f"build-binary: archive {target.name} ({target.stat().st_size // 1024} KiB)", flush=True)
