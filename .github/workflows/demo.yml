@@ -53,7 +53,7 @@ jobs:
       # Without this the job runs in an empty directory and every later step
       # fails with "no such file or directory" for a file that is plainly in
       # the repository. The workflow needs the source to build the image.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The image is built from this checkout, not pulled from ghcr.io. A
       # visitor-facing demo must not be able to fail because a container package
