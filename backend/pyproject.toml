@@ -51,7 +51,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "httpx>=0.28.1",
     "asgi-lifespan>=2.1",
-    "ruff>=0.17.0",
+    "ruff>=0.17.1",
     "mypy>=2.4.0",
 ]
 # Frozen-binary toolchain. Kept in an extra (not `dev`) so `pip install .` for a
