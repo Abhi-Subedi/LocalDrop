@@ -27,16 +27,16 @@ classifiers = [
   "Topic :: System :: Filesystems",
 ]
 dependencies = [
-    "fastapi>=0.143.0",
+    "fastapi>=0.162.0",
     # Floor guarantees the GHSA-7f5h-v6xp-fcq8 multi-range DoS fix; the app
     # additionally serves single-range responses only (see services/downloads.py).
-    "starlette>=1.7.0",
+    "starlette>=1.9.0",
     "uvicorn[standard]>=0.54.0",
-    "sqlalchemy[asyncio]>=2.1.4",
-    "alembic>=1.20.0",
+    "sqlalchemy[asyncio]>=2.1.6",
+    "alembic>=1.20.1",
     "psycopg[binary,pool]>=3.3.6",
-    "pydantic>=2.14.0",
-    "pydantic-settings>=2.15.0",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.1",
     "structlog>=26.1.0",
     "argon2-cffi>=25.1.0",
     "Pillow>=12.3.0",
