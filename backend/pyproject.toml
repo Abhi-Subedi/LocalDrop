@@ -47,11 +47,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.0",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
     "httpx>=0.28.1",
     "asgi-lifespan>=2.1",
-    "ruff>=0.17.0",
+    "ruff>=0.17.3",
     "mypy>=2.4.0",
 ]
 # Frozen-binary toolchain. Kept in an extra (not `dev`) so `pip install .` for a
